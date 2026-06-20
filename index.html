@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BHF Group - Enterprise Workspace Infrastructure Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <header class="main-header">
+        <div class="logo-container">
+    <div class="logo-icon">
+        <img src="images/BHFlogo.jpg" alt="BHF Logo" style="width: 100%; height: auto;">
+    </div>
+    <div>
+        <h1>BHF GROUP</h1>
+        <p>IT Infrastructure Performance Portal</p>
+    </div>
+</div>
+        <nav class="nav-links">
+            <button onclick="goHome()"><i class="fas fa-home"></i> Home</button>
+            <button onclick="showOverallSummary()"><i class="fas fa-chart-pie"></i> All Branch Overview</button>
+            <button onclick="showAdminPanel()" class="admin-nav-btn"><i class="fas fa-user-shield"></i> Administration</button>
+        </nav>
+    </header>
+
+    <main class="content-bound">
+
+        <section id="homePage" class="page active">
+            <div class="hero-banner">
+                <h2>Network Operations Control Center</h2>
+                <p>Real-time terminal telemetry diagnostic streams and active site asset registries across the regional infrastructure cluster.</p>
+            </div>
+
+            <div class="split-layout">
+                <div class="main-column">
+                    <h3>Branch Workstation Infrastructure</h3>
+                    <p style="color:#64748b; margin-top:-10px; margin-bottom:20px; font-size:14px;">
+                        Select any branch profile below to actively monitor computer terminals, health states, tracking logs, and thermodynamic metrics.
+                    </p>
+                    <div class="branch-grid" id="branchGrid"></div>
+                </div>
+
+                <div class="side-column">
+                    <div class="broadcast-panel">
+                        <h3><i class="fas fa-bullhorn text-critical"></i> Active Maintenance Transmissions</h3>
+                        <div id="homeRemarks"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="dashboardPage" class="page hidden">
+            <div class="section-title-bar">
+                <div>
+                    <span class="breadcrumb-tag">Localized Infrastructure Sheet</span>
+                    <h2 id="selectedBranchTitle">Branch Workspace Diagnostics</h2>
+                </div>
+                <button class="edit-btn" style="background:#475569; color: white;" onclick="goHome()"><i class="fas fa-chevron-left"></i> Back to Home</button>
+            </div>
+
+            <div class="metrics-card-grid">
+                <div class="metric-card card-blue">
+                    <div class="card-icon"><i class="fas fa-microchip"></i></div>
+                    <div class="card-info"><h4 id="totalPCs">0</h4><p>Total Nodes Allocated</p></div>
+                </div>
+                <div class="metric-card card-green">
+                    <div class="card-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="card-info"><h4 id="healthyPCs">0</h4><p>Healthy Operations</p></div>
+                </div>
+                <div class="metric-card card-orange">
+                    <div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="card-info"><h4 id="warningPCs">0</h4><p>Warning Indicators</p></div>
+                </div>
+                <div class="metric-card card-red">
+                    <div class="card-icon"><i class="fas fa-radiation"></i></div>
+                    <div class="card-info"><h4 id="criticalPCs">0</h4><p>Critical Urgent Actions</p></div>
+                </div>
+            </div>
+
+            <div class="dashboard-split-matrix">
+                <div class="table-frame-panel">
+                    <h3>Monitored Station Cluster Log</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Station Name Tag</th>
+                                    <th>Operational State</th>
+                                    <th>Status Level</th>
+                                    <th>Processor (CPU)</th>
+                                    <th>Hardware Vendor</th>
+                                    <th>Storage Type</th>
+                                    <th>Capacity</th>
+                                    <th>Free Space</th>
+                                    <th>Chassis Temp</th>
+                                    <th>CPU Core Temp</th>
+                                    <th>Mainboard Temp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="branchTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="analytical-sidebar-panel">
+                    <div class="chart-box">
+                        <h3>Distribution Metrics Matrix</h3>
+                        <div class="chart-canvas-wrapper"><canvas id="branchChart"></canvas></div>
+                    </div>
+                    <div class="local-notes-box">
+                        <h3><i class="far fa-comments"></i> Logged Station Event Notes</h3>
+                        <div id="branchRemarks" class="remarks-scroll-stack"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="overallPage" class="page hidden">
+            <div class="section-title-bar">
+                <div>
+                    <h2>Consolidated Group Network Summary</h2>
+                    <p>Holistic health telemetry distributions compiled across all regional facility profiles.</p>
+                </div>
+            </div>
+
+            <div class="metrics-card-grid structural-five-column">
+                <div class="metric-card card-blue">
+                    <div class="card-icon"><i class="fas fa-network-wired"></i></div>
+                    <div class="card-info"><h4 id="overallBranches">0</h4><p>Monitored Properties</p></div>
+                </div>
+                <div class="metric-card card-dark">
+                    <div class="card-icon"><i class="fas fa-server"></i></div>
+                    <div class="card-info"><h4 id="overallPCs">0</h4><p>Aggregated Global Terminals</p></div>
+                </div>
+                <div class="metric-card card-green">
+                    <div class="card-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div class="card-info"><h4 id="overallHealthy">0</h4><p>Stable Fleet Operations</p></div>
+                </div>
+                <div class="metric-card card-orange">
+                    <div class="card-icon"><i class="fas fa-tools-heading"></i></div>
+                    <div class="card-info"><h4 id="overallMaintenance">0</h4><p>Needs Maintenance</p></div>
+                </div>
+                <div class="metric-card card-red">
+                    <div class="card-icon"><i class="fas fa-tools"></i></div>
+                    <div class="card-info"><h4 id="overallIssues">0</h4><p>Total Flagged Incidents</p></div>
+                </div>
+            </div>
+
+            <div class="dashboard-split-matrix" style="grid-template-columns: 1.2fr 0.8fr;">
+                <div class="table-frame-panel">
+                    <h3>Group Infrastructure Distribution Sheet</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Facility Location Profile</th>
+                                    <th>Total Node Assets</th>
+                                    <th>Healthy Terminals</th>
+                                    <th>Warning Fluctuations</th>
+                                    <th>Critical Action Items</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overallTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="table-frame-panel">
+                    <h3>Global Asset Scaling Metrics</h3>
+                    <div class="chart-canvas-wrapper" style="height: 320px;"><canvas id="overallChart"></canvas></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="adminPage" class="page hidden">
+            <div class="section-title-bar">
+                <div>
+                    <h2>Administrative Master Configuration Console</h2>
+                    <p>Authorized access point for node tracking, environment parameter overrides, configuration patches, and rollback logs.</p>
+                </div>
+            </div>
+
+            <div class="admin-selector-strip">
+                <div class="form-element" style="margin: 0; min-width: 320px;">
+                    <label for="adminBranchSelect" style="font-weight: 700; color: #1e293b;"><i class="fas fa-filter"></i> Target Department Domain Scope:</label>
+                    <select id="adminBranchSelect" onchange="loadAdminBranch()"></select>
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: auto;">
+                    <button class="add-btn" onclick="showAddPCForm()"><i class="fas fa-plus"></i> Register New PC</button>
+                    <button class="edit-btn" style="background: #475569; color: white;" onclick="toggleHistoryPane()"><i class="fas fa-history"></i> Change History</button>
+                </div>
+            </div>
+
+            <div id="pcFormContainer" class="form-container hidden">
+                <h3 id="formTitleHeader">Configure Machine Asset Parameters</h3>
+                <form id="pcForm">
+                    <div class="form-grid-layout">
+                        <div class="form-element"><label for="branchInput">Target Operational Domain Location</label><select id="branchInput" required></select></div>
+                        <div class="form-element"><label for="pcName">Infrastructure Asset Ident Name Tag</label><input type="text" id="pcName" required placeholder="e.g. BHF-PC-99"></div>
+                        
+                        <div class="form-element">
+                            <label for="pcState">Workstation Operational State</label>
+                            <select id="pcState" required>
+                                <option value="Active">Active (In-Service Fleet Production)</option>
+                                <option value="Down">Down (Offline Outage Fault Line)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-element">
+                            <label for="health">Calculated Health Status Priority</label>
+                            <select id="health" required>
+                                <option value="Healthy">Healthy (Normal Bounds)</option>
+                                <option value="Warning">Warning (Impaired Fleet Metrics)</option>
+                                <option value="Critical">Critical (Immediate Diagnostic Overhaul)</option>
+                            </select>
+                        </div>
+                        <div class="form-element"><label for="pcProcessor">Processor (CPU) Model Specification</label><input type="text" id="pcProcessor" required placeholder="e.g. Intel Core i5-12400F"></div>
+                        <div class="form-element"><label for="brand">Hardware System Manufacturer Brand</label><input type="text" id="brand" required placeholder="e.g. HP ProDesk"></div>
+                        <div class="form-element"><label for="storage">System Storage Configuration Type</label><input type="text" id="storage" required placeholder="e.g. NVMe M.2 SSD"></div>
+                        <div class="form-element"><label for="capacity">Total Factory Disk Drive Capacity</label><input type="text" id="capacity" required placeholder="e.g. 512GB"></div>
+                        <div class="form-element"><label for="freeSpace">Available Drive Free Space Remaining</label><input type="text" id="freeSpace" required placeholder="e.g. 45GB"></div>
+                        <div class="form-element"><label for="pcTemp">External System Chassis Temperature (°C)</label><input type="number" id="pcTemp" required></div>
+                        <div class="form-element"><label for="processorTemp">Internal Processor Core Temperature (°C)</label><input type="number" id="processorTemp" required></div>
+                        <div class="form-element"><label for="boardTemp">Mainboard Base Logic Architecture Temp (°C)</label><input type="number" id="boardTemp" required></div>
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                        <button type="button" class="delete-btn" style="padding:12px 24px;" onclick="document.getElementById('pcFormContainer').classList.add('hidden')">Discard Modifications</button>
+                        <button type="submit" class="add-btn" style="padding:12px 24px;">Commit Record Parameters</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="historyContainer" class="form-container hidden" style="margin-top: 25px; border-top: 4px solid #475569;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #1e293b;"><i class="fas fa-history" style="color: #475569;"></i> System Log & Reversion Operations</h3>
+                    <button class="delete-btn" style="padding: 6px 12px; font-size: 12px;" onclick="clearAllAuditLogs()">Clear Log History</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 10%;">ID Ref</th>
+                                <th style="width: 12%;">Event Action</th>
+                                <th style="width: 58%;">Change Metrics Description</th>
+                                <th style="width: 20%; text-align: center;">Controls</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyLogBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h3>Active Station Registries & Comprehensive Diagnostics</h3>
+            <div class="table-container" style="margin-bottom: 40px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Station Tag</th>
+                            <th>Operational State</th>
+                            <th>Status Level</th>
+                            <th>Processor (CPU)</th>
+                            <th>Hardware Spec</th>
+                            <th>Drive Config</th>
+                            <th>Storage Capacity</th>
+                            <th>Free Space Remaining</th>
+                            <th>Chassis</th>
+                            <th>CPU Core Temp</th>
+                            <th>Board Temp</th>
+                            <th style="text-align: center;">Management Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody"></tbody>
+                </table>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 40px 0;">
+
+            <div class="dashboard-split-matrix" style="grid-template-columns: 1.1fr 0.9fr;">
+                <div class="remarks-management">
+                    <h3>Issue Global Transmission Broadcast</h3>
+                    
+                    <div class="form-element">
+                        <label for="remarkBranch">1. Context Department Association</label>
+                        <select id="remarkBranch" onchange="syncBroadcastPCSelection()"></select>
+                    </div>
+                    
+                    <div class="form-element">
+                        <label style="font-weight:700;">2. Target Workstation Scope Allocation (Optional)</label>
+                        <span style="font-size:11px; color:#64748b; margin-top:-4px; margin-bottom:6px;">
+                            Leave completely unchecked to distribute as a general branch wide system announcement.
+                        </span>
+                        <div id="broadcastPcCheckboxContainer" class="pc-checkbox-scroll-box"></div>
+                    </div>
+
+                    <div class="form-element">
+                        <label for="remarkCategory">3. Transmission Threat Vector Grouping</label>
+                        <select id="remarkCategory">
+                            <option value="Healthy">Notice (Optimization Completed)</option>
+                            <option value="Warning">Warning (Scheduled Downtime)</option>
+                            <option value="Critical">Critical Alert (Hardware Incidents)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-element">
+                        <label for="remarkText">4. Detailed Incident Dispatch Log Description</label>
+                        <textarea id="remarkText" rows="4" placeholder="Input analytical system warnings or optimization briefs..."></textarea>
+                    </div>
+                    
+                    <button onclick="saveRemark()"><i class="fas fa-rss"></i> Publish System Note</button>
+                </div>
+                
+                <div class="table-frame-panel">
+                    <h3>Active Transmissions Directory</h3>
+                    <div id="remarksList" class="remarks-management-scroll-stack"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="pinModalOverlay" class="modal-overlay hidden">
+        <div class="pin-modal-card">
+            <div class="lock-icon"><i class="fas fa-lock"></i></div>
+            <h3>Security Verification</h3>
+            <p>Please type the administration infrastructure passkey to access this domain.</p>
+            <div class="pin-input-wrapper">
+                <input type="password" id="securePassField" maxlength="6" placeholder="••••••" onkeydown="if(event.key==='Enter') verifyAdminPinCode()">
+            </div>
+            <div class="modal-action-row">
+                <button type="button" class="btn-cancel" onclick="closeAdminPinModal()">Cancel</button>
+                <button type="button" class="btn-confirm" onclick="verifyAdminPinCode()">Verify System PIN</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+
+    <div id="pcModalOverlay" class="modal-overlay hidden">
+    <div class="pc-editor-modal" style="max-width: 900px;">
+        <h3>Modify PC Properties</h3>
+        <div id="pcModalForm">
+            <input type="hidden" id="editingIndex">
+            <div class="form-grid-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-element"><label>Operational State</label><select id="modalPcState"><option value="Active">Active</option><option value="Down">Down</option></select></div>
+                <div class="form-element"><label>Health Status</label><select id="modalHealth"><option value="Healthy">Healthy</option><option value="Warning">Warning</option><option value="Critical">Critical</option></select></div>
+                <div class="form-element"><label>Processor</label><input type="text" id="modalProcessor"></div>
+                <div class="form-element"><label>Brand</label><input type="text" id="modalBrand"></div>
+                <div class="form-element"><label>Storage</label><input type="text" id="modalStorage"></div>
+                <div class="form-element"><label>Capacity</label><input type="text" id="modalCapacity"></div>
+                <div class="form-element"><label>Free Space</label><input type="text" id="modalFreeSpace"></div>
+                <div class="form-element"><label>Chassis Temp</label><input type="number" id="modalPcTemp"></div>
+            </div>
+            <div class="modal-action-row" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn-cancel" onclick="closePcModal()">Discard</button>
+                <button type="button" onclick="commitPcChanges()" style="background-color: #2ebd59; color: white; font-weight: 600; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Commit changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
