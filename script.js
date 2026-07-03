@@ -32,6 +32,99 @@ let staffMarkers = {};
 let staffControl = null;
 let visibleBranchNames = [];
 
+const FIREBASE_REMOTE_DOC = {
+    collection: 'sharedState',
+    doc: 'itStaffProfiles'
+};
+let firebaseApp = null;
+let firestoreDb = null;
+let remoteSyncApplying = false;
+
+function isFirebaseConfigured() {
+    return Boolean(window.firebaseConfig && window.firebaseConfig.projectId && window.firebaseConfig.apiKey);
+}
+
+function isRemoteSyncActive() {
+    return Boolean(firestoreDb);
+}
+
+async function initializeRemoteSync() {
+    if (!isFirebaseConfigured() || typeof firebase === 'undefined') {
+        return;
+    }
+
+    try {
+        if (!firebase.apps.length) {
+            firebaseApp = firebase.initializeApp(window.firebaseConfig);
+        } else {
+            firebaseApp = firebase.app();
+        }
+        firestoreDb = firebase.firestore();
+
+        const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
+        docRef.onSnapshot((snapshot) => {
+            if (!snapshot.exists) return;
+            const remoteData = snapshot.data();
+            if (!remoteData || typeof remoteData.profiles !== 'object') return;
+
+            remoteSyncApplying = true;
+            try {
+                syncLocalStaffProfiles(remoteData.profiles);
+            } finally {
+                remoteSyncApplying = false;
+            }
+        }, (error) => {
+            console.error('Firebase shift sync error:', error);
+        });
+
+        const snapshot = await docRef.get();
+        if (snapshot.exists) {
+            const remoteData = snapshot.data();
+            if (remoteData && typeof remoteData.profiles === 'object') {
+                remoteSyncApplying = true;
+                try {
+                    syncLocalStaffProfiles(remoteData.profiles);
+                } finally {
+                    remoteSyncApplying = false;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to initialize remote sync:', e);
+    }
+}
+
+function syncLocalStaffProfiles(remoteProfiles) {
+    if (!remoteProfiles || typeof remoteProfiles !== 'object') {
+        return;
+    }
+
+    const currentProfiles = getStoredStaffProfiles();
+    const remoteAsJson = JSON.stringify(remoteProfiles || {});
+    const currentAsJson = JSON.stringify(currentProfiles || {});
+    if (remoteAsJson === currentAsJson) {
+        return;
+    }
+
+    persistStaffProfiles(remoteProfiles, { skipRemote: true });
+    renderITStaffProfileGrid();
+    updateBHFMapStaffMarkers();
+    populateITTrackerControls();
+    updateITTrackerFields();
+    toastNotice('success', 'Live sync active', 'Staff and shift data were updated from shared state.');
+}
+
+async function syncProfilesToRemote(profiles) {
+    if (!firestoreDb || !profiles || typeof profiles !== 'object') return;
+
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
+        await docRef.set({ profiles }, { merge: true });
+    } catch (e) {
+        console.error('Failed to sync profiles to remote:', e);
+    }
+}
+
 function populateHomeBranchSelect() {
     const select = document.getElementById('homeBranchSelect');
     if (!select) return;
@@ -478,8 +571,11 @@ function autoRepairStoredProfiles(storedProfiles) {
     return needsRepair ? repaired : storedProfiles;
 }
 
-function persistStaffProfiles(profiles) {
+function persistStaffProfiles(profiles, options = {}) {
     localStorage.setItem('itStaffProfiles', JSON.stringify(profiles));
+    if (!options.skipRemote && !remoteSyncApplying && isRemoteSyncActive()) {
+        syncProfilesToRemote(profiles);
+    }
 }
 
 function getCurrentAdminKey() {
@@ -910,6 +1006,12 @@ window.addEventListener('load', () => {
     setTimeout(() => {
         if (bhfMap) bhfMap.invalidateSize();
     }, 1000);
+});
+
+window.addEventListener('load', () => {
+    if (isFirebaseConfigured()) {
+        initializeRemoteSync();
+    }
 });
 
 function updateBHFMapStaffMarkers() {
