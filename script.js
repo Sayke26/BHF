@@ -73,6 +73,7 @@ try {
 }
 
 async function initializeRemoteSync() {
+    console.debug('[RemoteSync] initializeRemoteSync() start', { firebaseConfig: window.firebaseConfig });
     if (!isFirebaseConfigured() || typeof firebase === 'undefined') {
         console.warn('Firebase not configured or library missing.');
         updateRemoteSyncStatusDisplay('offline', 'Firebase not loaded');
@@ -89,8 +90,10 @@ async function initializeRemoteSync() {
 
         const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
         docRef.onSnapshot((snapshot) => {
+            console.debug('[RemoteSync] onSnapshot received', { exists: snapshot.exists });
             if (!snapshot.exists) return;
             const remoteData = snapshot.data();
+            console.debug('[RemoteSync] remoteData', remoteData);
             if (!remoteData || typeof remoteData.profiles !== 'object') return;
 
             remoteSyncApplying = true;
@@ -101,11 +104,14 @@ async function initializeRemoteSync() {
             }
         }, (error) => {
             console.error('Firebase shift sync error:', error);
+            updateRemoteSyncStatusDisplay('error', error.message || String(error));
         });
 
         const snapshot = await docRef.get();
+        console.debug('[RemoteSync] initial doc get', { exists: snapshot.exists, id: FIREBASE_REMOTE_DOC.doc });
         if (snapshot.exists) {
             const remoteData = snapshot.data();
+            console.debug('[RemoteSync] initial remoteData', remoteData);
             if (remoteData && typeof remoteData.profiles === 'object') {
                 remoteSyncApplying = true;
                 try {
@@ -143,11 +149,16 @@ function syncLocalStaffProfiles(remoteProfiles) {
 }
 
 async function syncProfilesToRemote(profiles) {
-    if (!firestoreDb || !profiles || typeof profiles !== 'object') return;
+    if (!firestoreDb || !profiles || typeof profiles !== 'object') {
+        console.warn('[RemoteSync] syncProfilesToRemote skipped', { firestoreDbExists: !!firestoreDb, profilesType: typeof profiles });
+        return;
+    }
 
     try {
+        console.debug('[RemoteSync] syncProfilesToRemote()', profiles);
         const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
         await docRef.set({ profiles }, { merge: true });
+        console.debug('[RemoteSync] syncProfilesToRemote complete');
     } catch (e) {
         console.error('Failed to sync profiles to remote:', e);
         updateRemoteSyncStatusDisplay('error', e.message || String(e));
@@ -622,6 +633,7 @@ function persistStaffProfiles(profiles, options = {}) {
     try {
         if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'profiles-updated', profiles });
     } catch (e) { /* ignore */ }
+    console.debug('[RemoteSync] persistStaffProfiles', { options, remoteSyncApplying, isRemoteSyncActive: isRemoteSyncActive() });
     if (!options.skipRemote && !remoteSyncApplying && isRemoteSyncActive()) {
         syncProfilesToRemote(profiles);
     } else {

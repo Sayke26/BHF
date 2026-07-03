@@ -58,9 +58,9 @@ body { background-color: var(--bg-light); color: var(--text-main); line-height: 
 
 /* Remote sync status indicator */
 .remote-sync-status {
-    position: absolute;
-    right: 20px;
-    top: 18px;
+    position: relative;
+    margin-left: auto;
+    pointer-events: none;
     background: rgba(255,255,255,0.06);
     color: #e2e8f0;
     padding: 8px 12px;
@@ -73,7 +73,24 @@ body { background-color: var(--bg-light); color: var(--text-main); line-height: 
 .remote-sync-status.sync-offline { background: linear-gradient(90deg,#64748b,#475569); color: #fff; border-color: rgba(0,0,0,0.08); }
 
 /* Hide top nav — using side menu instead */
-.nav-links { display: flex; gap: 12px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+@media (max-width: 900px) {
+    .main-header {
+        padding: 18px 20px;
+        justify-content: flex-start;
+    }
+    .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .remote-sync-status {
+        order: 1;
+        width: 100%;
+        margin-left: 0;
+        text-align: right;
+    }
+}
 
 /* Side menu styles */
 #sideMenuToggle {
