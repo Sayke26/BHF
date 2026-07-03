@@ -633,8 +633,6 @@ function getCurrentAdminKey() {
     return adminUserKey || sessionStorage.getItem('adminUserKey') || null;
 }
 
-<<<<<<< HEAD
-=======
 function getCurrentAdminProfile() {
     const currentKey = getCurrentAdminKey();
     if (!currentKey) return null;
@@ -684,7 +682,6 @@ function toggleAdminProfileMenu(event) {
     }
 }
 
->>>>>>> 517c3e3 (Include local script.js changes)
 function canDeleteAuditHistory() {
     return getCurrentAdminKey() === 'ali';
 }
@@ -760,11 +757,7 @@ function renderITStaffProfileGrid() {
         const contactLine = profile.email ? `${profile.phone} · ${profile.email}` : `${profile.phone}`;
         const locationText = profile.location ? profile.location : '-';
         const remarksText = profile.remarks ? profile.remarks : '-';
-<<<<<<< HEAD
-        const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'standby');
-=======
         const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
->>>>>>> 517c3e3 (Include local script.js changes)
         const statusClass = shiftStatus === 'live' ? 'status-live' : shiftStatus === 'offline' ? 'status-oncall' : 'status-standby';
         const statusText = shiftStatus === 'live' ? `Live @ ${profile.location}` : shiftStatus === 'offline' ? 'On call' : 'Standby';
         return `
@@ -799,14 +792,6 @@ function populateITTrackerControls() {
         const profiles = Object.values(getStoredStaffProfiles());
         
         if (currentUser) {
-<<<<<<< HEAD
-            // When logged in, only show the current user's profile
-            const currentProfile = profiles.find(p => p.id === currentUser);
-            if (currentProfile) {
-                staffSelect.innerHTML = `<option value="${currentProfile.id}">${currentProfile.name} (Your Profile)</option>`;
-                staffSelect.value = currentProfile.id;
-                staffSelect.disabled = true; // Prevent changing selection
-=======
             // If Ali is signed in, allow selecting any active (live) staff to deploy
             if (currentUser === 'ali') {
                 // Show all staff; enable Ali's own option even if not active so he can select himself
@@ -828,7 +813,6 @@ function populateITTrackerControls() {
                     staffSelect.value = currentProfile.id;
                     staffSelect.disabled = true; // Prevent changing selection
                 }
->>>>>>> 517c3e3 (Include local script.js changes)
             }
         } else {
             // When not logged in, show all profiles with a placeholder
@@ -846,7 +830,6 @@ function normalizeSearchKey(value) {
     return String(value || '').trim().toLowerCase();
 }
 
-<<<<<<< HEAD
 function renderHomeBranchList() {
     const container = document.getElementById('homeBranchList');
     if (!container) return;
@@ -886,8 +869,6 @@ function filterHomeBranches(query) {
     renderHomeBranchList();
 }
 
-=======
->>>>>>> 517c3e3 (Include local script.js changes)
 function updateBranchMarkerVisibility() {
     if (!bhfMap) return;
     const visibleSet = new Set(visibleBranchNames.length > 0 ? visibleBranchNames : Object.keys(BRANCH_LOCATIONS));
@@ -917,11 +898,7 @@ function renderStaffMapMarkers() {
     staffMarkers = {};
 
     const profiles = Object.values(getStoredStaffProfiles()).filter(profile => {
-<<<<<<< HEAD
-        const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'standby');
-=======
         const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
->>>>>>> 517c3e3 (Include local script.js changes)
         return shiftStatus === 'live' && profile.location && BRANCH_LOCATIONS[profile.location];
     });
 
@@ -1010,11 +987,7 @@ function renderLiveStaffControl() {
 
         const profiles = Object.values(getStoredStaffProfiles());
         const liveStaff = profiles.filter(profile => {
-<<<<<<< HEAD
-            const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'standby');
-=======
             const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
->>>>>>> 517c3e3 (Include local script.js changes)
             return shiftStatus === 'live' && profile.location && BRANCH_LOCATIONS[profile.location];
         });
 
@@ -1107,11 +1080,8 @@ function initializeBHFMap() {
         }
 
         renderStaffMapMarkers();
-<<<<<<< HEAD
         renderHomeBranchList();
-=======
         populateHomeBranchSelect();
->>>>>>> 517c3e3 (Include local script.js changes)
         updateBranchMarkerVisibility();
         bhfMap.invalidateSize();
     } catch (e) {
@@ -1129,15 +1099,12 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 
-<<<<<<< HEAD
-=======
 window.addEventListener('load', () => {
     if (isFirebaseConfigured()) {
         initializeRemoteSync();
     }
 });
 
->>>>>>> 517c3e3 (Include local script.js changes)
 function updateBHFMapStaffMarkers() {
     if (!bhfMap) return;
     
@@ -1160,10 +1127,7 @@ function updateBHFMapStaffMarkers() {
     });
 
     renderStaffMapMarkers();
-<<<<<<< HEAD
     renderHomeBranchList();
-=======
->>>>>>> 517c3e3 (Include local script.js changes)
     updateBranchMarkerVisibility();
 }
 
@@ -1463,12 +1427,9 @@ function goHome() {
         updateBHFMapStaffMarkers();
         setTimeout(() => { if (bhfMap) bhfMap.invalidateSize(); }, 200);
     }
-<<<<<<< HEAD
+    populateHomeBranchSelect();
     renderHomeBranchList();
     filterHomeBranches(document.getElementById('branchSearchInput')?.value || '');
-=======
-    populateHomeBranchSelect();
->>>>>>> 517c3e3 (Include local script.js changes)
     // Ensure nav and hamburger visibility reflect the Home view
     try { updateNavVisibility(); updateHamburgerVisibility(); } catch (e) { console.error(e); }
 }
@@ -1800,15 +1761,9 @@ function updateITTrackerFields() {
         if (ageInput) ageInput.value = '';
         if (photoInput) photoInput.value = '';
         if (statusPill) {
-<<<<<<< HEAD
-            statusPill.textContent = 'Standby';
-            statusPill.classList.remove('status-pill-live');
-            statusPill.classList.add('status-pill-standby');
-=======
             statusPill.textContent = 'On call';
             statusPill.classList.remove('status-pill-live');
             statusPill.classList.add('status-pill-offline');
->>>>>>> 517c3e3 (Include local script.js changes)
         }
         return;
     }
@@ -1827,24 +1782,14 @@ function updateITTrackerFields() {
     if (photoInput) photoInput.value = '';
     if (passwordInput) passwordInput.value = '';
     if (statusPill) {
-<<<<<<< HEAD
-        const shiftStatus = data.shiftStatus || (data.location ? 'live' : 'standby');
-        const isLive = shiftStatus === 'live';
-        const isOffline = shiftStatus === 'offline';
-        statusPill.textContent = isLive ? `Live @ ${data.location}` : isOffline ? 'On call' : 'Standby';
-        statusPill.classList.toggle('status-pill-live', isLive);
-        statusPill.classList.toggle('status-pill-standby', !isLive && !isOffline);
-        statusPill.classList.toggle('status-pill-offline', isOffline);
-=======
         const shiftStatus = data.shiftStatus || (data.location ? 'live' : 'offline');
         const isLive = shiftStatus === 'live';
         const isOffline = shiftStatus === 'offline';
-            const isStandby = shiftStatus === 'standby';
-            statusPill.textContent = isLive ? `Live @ ${data.location}` : isOffline ? 'On call' : 'Standby';
-            statusPill.classList.toggle('status-pill-live', isLive);
-            statusPill.classList.toggle('status-pill-offline', isOffline);
-            statusPill.classList.toggle('status-pill-standby', isStandby);
->>>>>>> 517c3e3 (Include local script.js changes)
+        const isStandby = shiftStatus === 'standby';
+        statusPill.textContent = isLive ? `Live @ ${data.location}` : isOffline ? 'On call' : 'Standby';
+        statusPill.classList.toggle('status-pill-live', isLive);
+        statusPill.classList.toggle('status-pill-offline', isOffline);
+        statusPill.classList.toggle('status-pill-standby', isStandby);
     }
     // Restrict profile editing to the signed-in admin's own profile
     const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
@@ -1890,13 +1835,8 @@ function startShiftForSelectedStaff() {
         return;
     }
 
-<<<<<<< HEAD
-    const currentShiftStatus = selectedProfile.shiftStatus || (selectedProfile.location ? 'live' : 'standby');
-    if (currentShiftStatus === 'live' || currentShiftStatus === 'standby') {
-=======
     const currentShiftStatus = selectedProfile.shiftStatus || (selectedProfile.location ? 'live' : 'offline');
     if (currentShiftStatus === 'live') {
->>>>>>> 517c3e3 (Include local script.js changes)
         toastNotice('info', 'Shift Already Active', 'This staff member is already on shift. End the current shift before starting a new one.');
         return;
     }
@@ -1918,11 +1858,7 @@ function startShiftForSelectedStaff() {
     updateITTrackerFields();
     addShiftHistoryEntry('start_shift', selectedStaff, { location: locationValue, remarks: remarksText ? remarksText.value.trim() : '' });
     recordModification('start_shift', selectedStaff, { location: locationValue });
-<<<<<<< HEAD
-    toastNotice('success', 'Shift Started', shiftStatus === 'live' ? 'Staff member is now Live on shift.' : 'Staff member is now on Standby.');
-=======
     toastNotice('success', 'Shift Started', shiftStatus === 'live' ? 'Staff member is now Live on shift.' : 'Staff member is now Standby.');
->>>>>>> 517c3e3 (Include local script.js changes)
 }
 
 function openITTrackerLogHistoryModal() {
@@ -1992,11 +1928,7 @@ async function saveITTrackerDeployment() {
         return;
     }
 
-<<<<<<< HEAD
-    const currentShiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'standby');
-=======
     const currentShiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
->>>>>>> 517c3e3 (Include local script.js changes)
     if (currentShiftStatus === 'offline') {
         toastNotice('warning', 'Offline Staff', 'Cannot save a deployment for an offline staff member. Start the shift first.');
         return;
@@ -2339,11 +2271,7 @@ function openStaffProfileModal(staffKey) {
     if (title) title.textContent = profile.name;
     if (roleEl) roleEl.textContent = profile.role;
     if (statusEl) {
-<<<<<<< HEAD
-        const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'standby');
-=======
         const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
->>>>>>> 517c3e3 (Include local script.js changes)
         statusEl.textContent = shiftStatus === 'live' ? `Live @ ${profile.location}` : shiftStatus === 'offline' ? 'On call' : 'Standby';
     }
     if (summaryEl) summaryEl.textContent = bioText;
@@ -2371,15 +2299,12 @@ function openStaffProfileModal(staffKey) {
         }
     }
 
-<<<<<<< HEAD
-=======
     // Hide the Admin Login button in the modal when already authenticated
     try {
         const adminBtn = document.getElementById('staffAdminLoginBtn');
         if (adminBtn) adminBtn.style.display = adminAuthenticated ? 'none' : '';
     } catch (e) {}
 
->>>>>>> 517c3e3 (Include local script.js changes)
     if (overlay) overlay.classList.remove('hidden');
 }
 
@@ -2816,11 +2741,8 @@ function verifyAdminCredentials() {
         adminUserKey = matchedKey;
         try { sessionStorage.setItem('adminAuthenticated', '1'); sessionStorage.setItem('adminUserKey', adminUserKey); } catch(e) {}
         closeAdminPinModal();
-<<<<<<< HEAD
-=======
         // If an IT staff profile modal is open, close it when admin signs in
         try { closeStaffProfileModal(); } catch (e) { /* ignore if modal not present */ }
->>>>>>> 517c3e3 (Include local script.js changes)
         updateNavVisibility();
         populateITTrackerControls();
         refreshHistoryDeletionControls();

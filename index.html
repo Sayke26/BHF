@@ -231,11 +231,8 @@
                 </div>
                 <div style="display: flex; gap: 12px; align-items: center;">
                     <button class="add-btn" style="background: #16a34a; color: white;" onclick="openAddPcForm()"><i class="fas fa-plus"></i> Add PC</button>
-<<<<<<< HEAD
                     <button class="btn-danger" style="background: #dc2626; color: white; border:none; padding: 8px 14px; border-radius: 6px; cursor:pointer;" onclick="openDeletePcOverlay()"><i class="fas fa-trash-alt"></i> Delete PC</button>
                     <button class="add-btn" style="background: #2563eb; color: white;" onclick="openFloatingUpdateOverlay()"><i class="fas fa-edit"></i> Update PC</button>
-=======
->>>>>>> 7a751e8 (Expose firebase config on window + responsive hero/map height)
                     <button class="edit-btn" style="background: #475569; color: white;" onclick="toggleHistoryPane()"><i class="fas fa-history"></i> Change History</button>
                     <button class="btn-danger" style="background: #ef4444; color: white; border:none; padding: 8px 14px; border-radius: 6px; cursor:pointer;" onclick="logoutAdmin()"><i class="fas fa-sign-out-alt"></i> Logout</button>
                 </div>
@@ -755,11 +752,7 @@
                                 <h4>Deployment Status</h4>
                                 <p>Use this area for live updates. Profile details are maintained separately.</p>
                             </div>
-<<<<<<< HEAD
-                            <div id="itTrackerStatusPill" class="status-pill status-pill-standby"><i class="fas fa-circle"></i> Standby</div>
-=======
                             <div id="itTrackerStatusPill" class="status-pill status-pill-offline"><i class="fas fa-circle"></i> On call</div>
->>>>>>> 7a751e8 (Expose firebase config on window + responsive hero/map height)
                         </div>
                         <div class="form-element">
                             <label for="itTrackerStaffSelect">Select IT Staff Member</label>
@@ -1091,11 +1084,7 @@
                 <div class="staff-profile-hero-content">
                     <h3 id="staffProfileTitle">Staff Profile</h3>
                     <p id="staffProfileRole" class="staff-profile-role">IT Specialist</p>
-<<<<<<< HEAD
-                    <div class="staff-profile-status" id="staffProfileStatus">Standby</div>
-=======
                     <div class="staff-profile-status" id="staffProfileStatus">On call</div>
->>>>>>> 7a751e8 (Expose firebase config on window + responsive hero/map height)
                 </div>
             </div>
             <div class="staff-profile-content">
@@ -1108,14 +1097,10 @@
                 <div id="staffProfileLinks" class="staff-link-list"></div>
                 <div class="staff-modal-actions">
                     <a id="staffEmailLink" href="#" class="staff-email-button hidden" onclick="handleStaffEmailClick(event)"><i class="fas fa-envelope"></i> Email me</a>
-<<<<<<< HEAD
-                    <button type="button" class="add-btn" onclick="openStaffFeedbackForm()" style="background: #2563eb; color: white; display: flex; align-items: center; gap: 8px;"><i class="fas fa-comment-dots"></i> Add Feedback</button>
-=======
                     <div style="display:flex; gap:8px; align-items:center;">
                         <button type="button" class="add-btn" onclick="openStaffFeedbackForm()" style="background: #2563eb; color: white; display: flex; align-items: center; gap: 8px;"><i class="fas fa-comment-dots"></i> Add Feedback</button>
                         <button id="staffAdminLoginBtn" type="button" class="secondary-btn" onclick="(function(){ window.pendingAdminAction = 'showSummary'; document.getElementById('pinModalOverlay').classList.remove('hidden'); const userField = document.getElementById('adminUsernameField'); const passField = document.getElementById('adminPasswordField'); if (userField) { userField.value = ''; userField.focus(); } if (passField) passField.value = ''; })()" style="display: flex; align-items: center; gap:8px; white-space:nowrap;"><i class="fas fa-user-lock"></i> Admin Login</button>
                     </div>
->>>>>>> 7a751e8 (Expose firebase config on window + responsive hero/map height)
                 </div>
             </div>
         </div>
