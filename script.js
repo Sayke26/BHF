@@ -176,6 +176,11 @@ function updateRemoteSyncStatusDisplay(status, info) {
         const el = document.getElementById('remoteSyncStatus');
         if (!el) return;
         el.classList.remove('sync-ok', 'sync-error', 'sync-offline');
+        if (status === 'unknown') {
+            el.style.display = 'none';
+            return;
+        }
+        el.style.display = 'inline-flex';
         if (status === 'ok') el.classList.add('sync-ok');
         else if (status === 'error') el.classList.add('sync-error');
         else el.classList.add('sync-offline');
