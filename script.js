@@ -1594,6 +1594,8 @@ function showITTrackerPage() {
         }
     }
     updateITTrackerHistoryAccess();
+    try { renderItTrackerAnnouncements(); } catch (e) {}
+    try { displayAnnouncementsOnHome(); } catch (e) {}
     try { updateHamburgerVisibility(); } catch(e) {}
 }
 
