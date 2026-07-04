@@ -775,8 +775,18 @@ function renderITStaffProfileGrid() {
         const locationText = profile.location ? profile.location : '-';
         const remarksText = profile.remarks ? profile.remarks : '-';
         const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
-        const statusClass = shiftStatus === 'live' ? 'status-live' : shiftStatus === 'offline' ? 'status-oncall' : 'status-standby';
-        const statusText = shiftStatus === 'live' ? `Live @ ${profile.location}` : shiftStatus === 'offline' ? 'On call' : 'Standby';
+        let statusClass = 'status-standby';
+        let statusText = 'Standby';
+        if (shiftStatus === 'live') {
+            statusClass = 'status-live';
+            statusText = `Live @ ${profile.location}`;
+        } else if (shiftStatus === 'offline') {
+            statusClass = 'status-oncall';
+            statusText = 'On call';
+        } else if (shiftStatus === 'onleave') {
+            statusClass = 'status-onleave';
+            statusText = 'On Leave';
+        }
         return `
             <div id="${profile.id}Card" class="profile-card interactive" role="button" tabindex="0" onclick="openStaffProfileModal('${profile.id}')" onkeydown="if(event.key==='Enter'||event.key===' ') openStaffProfileModal('${profile.id}')">
                 <div class="profile-header">
@@ -1809,10 +1819,12 @@ function updateITTrackerFields() {
         const isLive = shiftStatus === 'live';
         const isOffline = shiftStatus === 'offline';
         const isStandby = shiftStatus === 'standby';
-        statusPill.textContent = isLive ? `Live @ ${data.location}` : isOffline ? 'On call' : 'Standby';
+        const isOnLeave = shiftStatus === 'onleave';
+        statusPill.textContent = isLive ? `Live @ ${data.location}` : isOffline ? 'On call' : isOnLeave ? 'On Leave' : 'Standby';
         statusPill.classList.toggle('status-pill-live', isLive);
         statusPill.classList.toggle('status-pill-offline', isOffline);
         statusPill.classList.toggle('status-pill-standby', isStandby);
+        statusPill.classList.toggle('status-pill-onleave', isOnLeave);
     }
     // Restrict profile editing to the signed-in admin's own profile
     const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
@@ -2297,7 +2309,15 @@ function openStaffProfileModal(staffKey) {
     if (roleEl) roleEl.textContent = profile.role;
     if (statusEl) {
         const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
-        statusEl.textContent = shiftStatus === 'live' ? `Live @ ${profile.location}` : shiftStatus === 'offline' ? 'On call' : 'Standby';
+        if (shiftStatus === 'live') {
+            statusEl.textContent = `Live @ ${profile.location}`;
+        } else if (shiftStatus === 'offline') {
+            statusEl.textContent = 'On call';
+        } else if (shiftStatus === 'onleave') {
+            statusEl.textContent = 'On Leave';
+        } else {
+            statusEl.textContent = 'Standby';
+        }
     }
     if (summaryEl) summaryEl.textContent = bioText;
     if (phoneEl) phoneEl.textContent = profile.phone || 'Phone not set';
