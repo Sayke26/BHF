@@ -1572,6 +1572,12 @@ function showITTrackerPage() {
             staffSelect.value = currentUser;
             updateITTrackerFields();
         }
+    } else {
+        // Make sure the feedback panel shows data for the selected staff after page load
+        const staffSelect = document.getElementById('itTrackerStaffSelect');
+        if (staffSelect && staffSelect.value) {
+            displayStaffFeedback(staffSelect.value);
+        }
     }
     updateITTrackerHistoryAccess();
     try { updateHamburgerVisibility(); } catch(e) {}
