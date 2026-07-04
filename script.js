@@ -768,7 +768,8 @@ function readFileAsDataURL(file) {
 function renderITStaffProfileGrid() {
     const grid = document.getElementById('profileGrid');
     const countEl = document.getElementById('homeStaffCount');
-    const profiles = Object.values(getStoredStaffProfiles());
+    // Exclude disabled profiles from the home roster
+    const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
     if (!grid) return;
     grid.innerHTML = profiles.map((profile) => {
         const contactLine = profile.email ? `${profile.phone} · ${profile.email}` : `${profile.phone}`;
@@ -816,7 +817,8 @@ function populateITTrackerControls() {
     const locationSelect = document.getElementById('itTrackerLocationSelect');
     if (staffSelect) {
         const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
-        const profiles = Object.values(getStoredStaffProfiles());
+        // Exclude disabled profiles from tracker selection
+        const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
         
         if (currentUser) {
             // If Ali is signed in, allow selecting any active (live) staff to deploy
@@ -2244,14 +2246,18 @@ function confirmRemoveCurrentITStaff() {
 
     const profiles = getStoredStaffProfiles();
     const profileName = profiles[pendingStaffRemoval]?.name || 'Staff member';
-    recordModification('delete_profile', pendingStaffRemoval, { name: profileName });
-    delete profiles[pendingStaffRemoval];
+    // Mark the profile as disabled instead of deleting so histories remain intact
+    recordModification('disable_profile', pendingStaffRemoval, { name: profileName });
+    profiles[pendingStaffRemoval] = {
+        ...profiles[pendingStaffRemoval],
+        disabled: true
+    };
     persistStaffProfiles(profiles);
     renderITStaffProfileGrid();
     populateITTrackerControls();
     resetITTrackerForm();
     closeRemoveStaffModal();
-    toastNotice('warning', 'Staff Removed', `${profileName} was removed from the roster.`);
+    toastNotice('warning', 'Staff Disabled', `${profileName} was disabled and removed from the roster.`);
 }
 
 function resetITTrackerForm() {
