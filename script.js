@@ -1134,6 +1134,10 @@ window.addEventListener('load', () => {
     }
 });
 
+window.addEventListener('load', () => {
+    try { displayAnnouncementsOnHome(); } catch (e) {}
+});
+
 function updateBHFMapStaffMarkers() {
     if (!bhfMap) return;
     
