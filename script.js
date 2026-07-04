@@ -240,13 +240,14 @@ function updateRemoteSyncStatusDisplay(status, info) {
         const el = document.getElementById('remoteSyncStatus');
         if (!el) return;
         el.classList.remove('sync-ok', 'sync-error', 'sync-offline');
-        if (status === 'unknown') {
+        // Hide when status is unknown or OK (connected) to reduce UI noise.
+        if (status === 'unknown' || status === 'ok') {
             el.style.display = 'none';
             return;
         }
+        // For other states (error/offline) show the indicator.
         el.style.display = 'inline-flex';
-        if (status === 'ok') el.classList.add('sync-ok');
-        else if (status === 'error') el.classList.add('sync-error');
+        if (status === 'error') el.classList.add('sync-error');
         else el.classList.add('sync-offline');
         el.textContent = `Sync: ${status}` + (info ? ` · ${info}` : '');
     } catch (e) { console.warn(e); }
