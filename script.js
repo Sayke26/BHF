@@ -1201,6 +1201,7 @@ window.addEventListener('load', () => {
 
 window.addEventListener('load', () => {
     try { displayAnnouncementsOnHome(); } catch (e) {}
+    try { renderITStaffProfileGrid(); } catch (e) {}
 });
 
 function updateBHFMapStaffMarkers() {
