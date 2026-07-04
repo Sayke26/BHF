@@ -56,6 +56,31 @@ body { background-color: var(--bg-light); color: var(--text-main); line-height: 
 .profile-dropdown-actions button:hover { background: rgba(255,255,255,0.08); }
 .profile-dropdown-actions button + button { border-top: 1px solid rgba(255,255,255,0.06); }
 
+/* Uniform toolbar button sizing for grouped action areas */
+.admin-toolbar-actions button,
+.it-tracker-action-panel button,
+.it-tracker-panel .form-actions-row button,
+.report-actions button,
+.dashboard-split-matrix .report-actions button {
+    padding: 10px 16px;
+    min-width: 140px;
+    height: 42px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+/* Ensure primary/add buttons keep their color but match sizing */
+.admin-toolbar-actions .add-btn,
+.it-tracker-action-panel .add-btn { padding: 10px 16px; }
+
+/* Make danger buttons consistent */
+.admin-toolbar-actions .btn-danger { padding: 10px 16px; }
+
 /* Remote sync status indicator */
 .remote-sync-status {
     display: none;
