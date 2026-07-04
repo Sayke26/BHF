@@ -781,7 +781,25 @@
                         </div>
                     </div>
                 </div>
-                <!-- Right panel removed: Feedback History is available under Feedbacks page -->
+                <!-- Right panel: Announcements editor for admins -->
+                <div class="it-tracker-panel it-tracker-panel--right">
+                    <h3>Announcements (Admins)</h3>
+                    <p class="panel-subtitle">Post administrative announcements that appear on Home and in the tracker.</p>
+
+                    <div class="form-element">
+                        <label for="announcementText">Announcement Text</label>
+                        <textarea id="announcementText" rows="4" placeholder="Type announcement for staff and branches..."></textarea>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom:12px;">
+                        <button class="add-btn" type="button" onclick="saveAdminAnnouncement();"><i class="fas fa-save"></i> Save</button>
+                        <button class="btn-cancel" type="button" onclick="clearAnnouncementDraft();"><i class="fas fa-eraser"></i> Clear</button>
+                    </div>
+
+                    <div style="margin-top:6px;">
+                        <h4 style="margin:0 0 8px 0;">Saved Announcements</h4>
+                        <div id="itTrackerAnnouncementList" style="display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; padding-right:6px;"></div>
+                    </div>
+                </div>
             </div>
         </section>
 
