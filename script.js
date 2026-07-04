@@ -1836,16 +1836,18 @@ function updateITTrackerFields() {
 }
 
 function startShiftForSelectedStaff() {
+    // Prefer the selected staff in the IT Tracker UI, but fall back to the currently
+    // signed-in admin profile when invoked from the admin dropdown.
     const staffSelect = document.getElementById('itTrackerStaffSelect');
     const locationSelect = document.getElementById('itTrackerLocationSelect');
     const remarksText = document.getElementById('itTrackerRemarksText');
 
-    if (!staffSelect) {
-        toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
-        return;
+    let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
+    if (!selectedStaff) {
+        // Use the logged-in admin's profile key if available
+        const adminKey = getCurrentAdminKey();
+        if (adminKey) selectedStaff = adminKey;
     }
-
-    const selectedStaff = staffSelect.value;
     if (!selectedStaff) {
         toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
         return;
@@ -1864,14 +1866,14 @@ function startShiftForSelectedStaff() {
         return;
     }
 
-    const locationValue = locationSelect ? (locationSelect.value || selectedProfile.location || '') : (selectedProfile.location || '');
+    const locationValue = (locationSelect && locationSelect.value) ? locationSelect.value : (selectedProfile.location || '');
     const shiftStatus = locationValue ? 'live' : 'standby';
 
     profiles[selectedStaff] = {
         ...selectedProfile,
         shiftStatus,
         location: locationValue,
-        remarks: remarksText ? remarksText.value.trim() : selectedProfile.remarks || ''
+        remarks: (remarksText && remarksText.value) ? remarksText.value.trim() : (selectedProfile.remarks || '')
     };
 
     persistStaffProfiles(profiles);
@@ -6403,12 +6405,13 @@ function refreshAllViews() {
 }
 
 function endShiftForSelectedStaff() {
+    // Allow ending the shift for the currently selected staff or the logged-in admin
     const staffSelect = document.getElementById('itTrackerStaffSelect');
-    if (!staffSelect) {
-        toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
-        return;
+    let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
+    if (!selectedStaff) {
+        const adminKey = getCurrentAdminKey();
+        if (adminKey) selectedStaff = adminKey;
     }
-    const selectedStaff = staffSelect.value;
     if (!selectedStaff) {
         toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
         return;
