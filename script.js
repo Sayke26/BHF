@@ -6567,13 +6567,11 @@ function renderItTrackerAnnouncements() {
     container.innerHTML = list.slice().reverse().map(a => {
         const time = new Date(a.createdAt).toLocaleString();
         return `
-            <div style="background:#ffffff; border:1px solid #e2e8f0; padding:12px; border-radius:8px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                    <div style="font-weight:700; color:#0f172a;">${a.message}</div>
-                    <div style="font-size:12px; color:#64748b; text-align:right; min-width:110px;">${time}${a.createdBy ? `\nby ${a.createdBy}` : ''}</div>
-                </div>
-                <div style="margin-top:8px; text-align:right;">
-                    <button class="btn-cancel" style="padding:6px 10px; margin-left:8px;" onclick="deleteAdminAnnouncement('${a.id}')">Delete</button>
+            <div class="announcement-card">
+                <div style="font-weight:700; color:#0f172a;">${a.message}</div>
+                <div class="meta" style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+                    <div style="font-size:12px; color:#64748b;">${time}${a.createdBy ? ' • ' + a.createdBy : ''}</div>
+                    <div style="text-align:right;"><button class="btn-cancel" style="padding:6px 10px; margin-left:8px;" onclick="deleteAdminAnnouncement('${a.id}')">Delete</button></div>
                 </div>
             </div>`;
     }).join('');
@@ -6590,9 +6588,9 @@ function displayAnnouncementsOnHome() {
     container.innerHTML = list.slice().reverse().map(a => {
         const time = new Date(a.createdAt).toLocaleString();
         return `
-            <div style="background:#fff; border:1px solid #e2e8f0; padding:12px; border-radius:8px; margin-bottom:10px;">
-                <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${a.message}</div>
-                <div style="font-size:12px; color:#64748b;">${time} ${a.createdBy ? ' • ' + a.createdBy : ''}</div>
+            <div class="announcement-card">
+                <div style="font-weight:700; color:#0f172a;">${a.message}</div>
+                <div class="meta">${time} ${a.createdBy ? ' • ' + a.createdBy : ''}</div>
             </div>`;
     }).join('');
 }
