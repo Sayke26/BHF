@@ -6458,3 +6458,40 @@ function endShiftForSelectedStaff() {
     recordModification('end_shift', selectedStaff, {});
     toastNotice('success', 'Shift Ended', 'Staff member shifted to Offline.');
 }
+
+function setOnLeaveForSelectedStaff() {
+    // Allow marking as On Leave for the selected staff or the logged-in admin
+    const staffSelect = document.getElementById('itTrackerStaffSelect');
+    let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
+    if (!selectedStaff) {
+        const adminKey = getCurrentAdminKey();
+        if (adminKey) selectedStaff = adminKey;
+    }
+    if (!selectedStaff) {
+        toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
+        return;
+    }
+
+    const profiles = getStoredStaffProfiles();
+    const selectedProfile = profiles[selectedStaff];
+    if (!selectedProfile) {
+        toastNotice('error', 'Profile Not Found', 'The selected staff member does not exist.');
+        return;
+    }
+
+    profiles[selectedStaff] = {
+        ...selectedProfile,
+        shiftStatus: 'onleave',
+        location: '',
+        remarks: selectedProfile.remarks || ''
+    };
+
+    persistStaffProfiles(profiles);
+    renderITStaffProfileGrid();
+    updateBHFMapStaffMarkers();
+    populateITTrackerControls();
+    updateITTrackerFields();
+    addShiftHistoryEntry('on_leave', selectedStaff, { remarks: profiles[selectedStaff].remarks || '' });
+    recordModification('on_leave', selectedStaff, {});
+    toastNotice('success', 'On Leave', 'Staff member marked as On Leave.');
+}
