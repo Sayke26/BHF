@@ -158,6 +158,40 @@ async function initializeRemoteSync() {
     }
 }
 
+    // Start a periodic fetch to ensure remote announcements are pulled even if onSnapshot is blocked
+    try {
+        if (announcementsPollIntervalId) clearInterval(announcementsPollIntervalId);
+        announcementsPollIntervalId = setInterval(() => {
+            try { fetchAnnouncementsFromRemote(); } catch (e) {}
+        }, 8000);
+    } catch (e) { /* ignore */ }
+
+async function fetchAnnouncementsFromRemote() {
+    if (!firestoreDb) return;
+    try {
+        const annRef = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
+        const snap = await annRef.get();
+        if (!snap.exists) return;
+        const data = snap.data();
+        if (!data || !Array.isArray(data.announcements)) return;
+        const remoteList = data.announcements || [];
+        // Only apply if different
+        const localJson = JSON.stringify(getStoredAnnouncements() || []);
+        const remoteJson = JSON.stringify(remoteList || []);
+        if (localJson !== remoteJson) {
+            remoteAnnouncementsApplying = true;
+            try {
+                persistAnnouncements(remoteList);
+                renderItTrackerAnnouncements();
+                displayAnnouncementsOnHome();
+                try { if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'announcements-updated', announcements: remoteList }); } catch (e) {}
+            } finally { remoteAnnouncementsApplying = false; }
+        }
+    } catch (e) {
+        console.warn('fetchAnnouncementsFromRemote failed', e);
+        updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
 function syncLocalStaffProfiles(remoteProfiles) {
     if (!remoteProfiles || typeof remoteProfiles !== 'object') {
         return;
