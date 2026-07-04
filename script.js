@@ -1449,6 +1449,8 @@ function goHome() {
     }
     renderBranchGridDashboard();
     loadHomeRemarks();
+    try { displayAnnouncementsOnHome(); } catch (e) {}
+    try { displayAnnouncementsOnHome(); } catch (e) {}
     updateITProfilesDisplay();
     if (!bhfMap) {
         initializeBHFMap();
@@ -6501,3 +6503,96 @@ function setOnLeaveForSelectedStaff() {
     recordModification('on_leave', selectedStaff, {});
     toastNotice('success', 'On Leave', 'Staff member marked as On Leave.');
 }
+
+// Announcements management (admins)
+function getStoredAnnouncements() {
+    try {
+        return JSON.parse(localStorage.getItem('adminAnnouncements') || '[]');
+    } catch (e) { return []; }
+}
+
+function persistAnnouncements(list) {
+    localStorage.setItem('adminAnnouncements', JSON.stringify(list || []));
+}
+
+function saveAdminAnnouncement() {
+    const textEl = document.getElementById('announcementText');
+    if (!textEl) return;
+    const message = (textEl.value || '').trim();
+    if (!message) {
+        toastNotice('warning', 'Empty Announcement', 'Please type an announcement before saving.');
+        return;
+    }
+    const adminKey = getCurrentAdminKey();
+    if (!adminKey) {
+        toastNotice('error', 'Admin Required', 'Only signed-in administrators can post announcements.');
+        document.getElementById('pinModalOverlay')?.classList.remove('hidden');
+        return;
+    }
+
+    const list = getStoredAnnouncements();
+    const entry = { id: `ann_${Date.now()}`, message, createdBy: adminKey, createdAt: new Date().toISOString() };
+    list.push(entry);
+    persistAnnouncements(list);
+    textEl.value = '';
+    renderItTrackerAnnouncements();
+    displayAnnouncementsOnHome();
+    toastNotice('success', 'Saved', 'Announcement saved.');
+}
+
+function deleteAdminAnnouncement(id) {
+    const adminKey = getCurrentAdminKey();
+    if (!adminKey) {
+        toastNotice('error', 'Admin Required', 'Only signed-in administrators can delete announcements.');
+        return;
+    }
+    let list = getStoredAnnouncements();
+    list = list.filter(a => a.id !== id);
+    persistAnnouncements(list);
+    renderItTrackerAnnouncements();
+    displayAnnouncementsOnHome();
+    toastNotice('success', 'Deleted', 'Announcement deleted.');
+}
+
+function renderItTrackerAnnouncements() {
+    const container = document.getElementById('itTrackerAnnouncementList');
+    if (!container) return;
+    const list = getStoredAnnouncements();
+    if (!list || list.length === 0) {
+        container.innerHTML = '<p style="color:#94a3b8; font-style:italic;">No announcements yet.</p>';
+        return;
+    }
+    container.innerHTML = list.slice().reverse().map(a => {
+        const time = new Date(a.createdAt).toLocaleString();
+        return `
+            <div style="background:#ffffff; border:1px solid #e2e8f0; padding:12px; border-radius:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div style="font-weight:700; color:#0f172a;">${a.message}</div>
+                    <div style="font-size:12px; color:#64748b; text-align:right; min-width:110px;">${time}${a.createdBy ? `\nby ${a.createdBy}` : ''}</div>
+                </div>
+                <div style="margin-top:8px; text-align:right;">
+                    <button class="btn-cancel" style="padding:6px 10px; margin-left:8px;" onclick="deleteAdminAnnouncement('${a.id}')">Delete</button>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function displayAnnouncementsOnHome() {
+    const container = document.getElementById('homeAnnouncementList');
+    if (!container) return;
+    const list = getStoredAnnouncements();
+    if (!list || list.length === 0) {
+        container.innerHTML = '<div style="padding:18px; color:#64748b; font-style:italic;">No announcements at this time.</div>';
+        return;
+    }
+    container.innerHTML = list.slice().reverse().map(a => {
+        const time = new Date(a.createdAt).toLocaleString();
+        return `
+            <div style="background:#fff; border:1px solid #e2e8f0; padding:12px; border-radius:8px; margin-bottom:10px;">
+                <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">${a.message}</div>
+                <div style="font-size:12px; color:#64748b;">${time} ${a.createdBy ? ' • ' + a.createdBy : ''}</div>
+            </div>`;
+    }).join('');
+}
+
+function clearAnnouncementDraft() { const el = document.getElementById('announcementText'); if (el) el.value = ''; }
