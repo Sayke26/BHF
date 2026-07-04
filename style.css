@@ -903,10 +903,13 @@ tr:hover td { background-color: #f8fafc; }
 .status-pill-offline { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .status-pill-onleave { background: #faf5ff; border-color: #f3e8ff; color: #6b21a8; }
 
-.it-tracker-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 26px; align-items: start; }
+.it-tracker-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 26px; align-items: start; }
 .it-tracker-panel { background: white; border: 1px solid var(--border-color); border-radius: 18px; padding: 24px; box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08); }
 .it-tracker-panel--left { display: flex; flex-direction: column; gap: 22px; }
 .it-tracker-panel--right { display: flex; flex-direction: column; gap: 18px; }
+/* Make panel headers visually consistent */
+.it-tracker-panel h3 { margin: 0 0 6px 0; font-size: 20px; color: #102d6d; }
+.it-tracker-panel .panel-subtitle { margin-bottom: 12px; }
     .feedback-summary-table-wrapper { background: #ffffff; border: 1px solid rgba(17,34,60,0.06); border-radius: 20px; padding: 26px 22px; box-shadow: 0 30px 80px rgba(15,23,42,0.06); max-width: 920px; margin: 12px auto; }
     .feedback-summary-table-header { margin-bottom: 12px; }
     .feedback-summary-table-header h4 { margin: 0 0 6px; font-size: 20px; color: #102d6d; font-weight:800; }
@@ -930,6 +933,7 @@ tr:hover td { background-color: #f8fafc; }
         .feedback-summary-table-wrapper { padding: 18px; margin: 8px; }
         .feedback-summary-table td { padding: 12px 14px; }
         #feedbackHistoryStaffSelect { padding: 12px 14px; font-size: 15px; }
+    .it-tracker-layout { grid-template-columns: 1fr; }
     }
 .it-tracker-section { border: 1px solid #e2e8f0; border-radius: 18px; padding: 18px; background: #f8fafc; }
 .it-tracker-section h4 { font-size: 16px; margin-bottom: 8px; }
