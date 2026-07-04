@@ -36,9 +36,14 @@ const FIREBASE_REMOTE_DOC = {
     collection: 'sharedState',
     doc: 'itStaffProfiles'
 };
+const FIREBASE_ANNOUNCEMENTS_DOC = {
+    collection: 'sharedState',
+    doc: 'adminAnnouncements'
+};
 let firebaseApp = null;
 let firestoreDb = null;
 let remoteSyncApplying = false;
+let remoteAnnouncementsApplying = false;
 
 function isFirebaseConfigured() {
     return Boolean(window.firebaseConfig && window.firebaseConfig.projectId && window.firebaseConfig.apiKey);
@@ -61,6 +66,13 @@ try {
                     persistStaffProfiles(msg.profiles, { skipRemote: true });
                     renderITStaffProfileGrid();
                     updateBHFMapStaffMarkers();
+                }
+            }
+            if (msg.type === 'announcements-updated' && msg.announcements) {
+                if (!remoteAnnouncementsApplying) {
+                    persistAnnouncements(msg.announcements);
+                    renderItTrackerAnnouncements();
+                    displayAnnouncementsOnHome();
                 }
             }
             if (msg.type === 'status') {
@@ -121,6 +133,24 @@ async function initializeRemoteSync() {
                 }
             }
         }
+        // Listen for announcements doc changes as well
+        try {
+            const annRef = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
+            annRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !Array.isArray(data.announcements)) return;
+                remoteAnnouncementsApplying = true;
+                try {
+                    persistAnnouncements(data.announcements || []);
+                    renderItTrackerAnnouncements();
+                    displayAnnouncementsOnHome();
+                } finally {
+                    remoteAnnouncementsApplying = false;
+                }
+            }, (err) => console.error('Announcements sync error', err));
+        } catch (e) { console.warn('Announcements listener not attached', e); }
+
         updateRemoteSyncStatusDisplay('ok', 'Connected to Firestore');
     } catch (e) {
         console.error('Failed to initialize remote sync:', e);
@@ -6521,6 +6551,18 @@ function persistAnnouncements(list) {
     localStorage.setItem('adminAnnouncements', JSON.stringify(list || []));
 }
 
+async function syncAnnouncementsToRemote(list) {
+    if (!firestoreDb || !Array.isArray(list)) return;
+    if (remoteAnnouncementsApplying) return;
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
+        await docRef.set({ announcements: list }, { merge: true });
+    } catch (e) {
+        console.error('Failed to sync announcements to remote:', e);
+        updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
+
 function saveAdminAnnouncement() {
     const textEl = document.getElementById('announcementText');
     if (!textEl) return;
@@ -6540,6 +6582,8 @@ function saveAdminAnnouncement() {
     const entry = { id: `ann_${Date.now()}`, message, createdBy: adminKey, createdAt: new Date().toISOString() };
     list.push(entry);
     persistAnnouncements(list);
+    try { if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'announcements-updated', announcements: list }); } catch (e) {}
+    try { syncAnnouncementsToRemote(list); } catch (e) {}
     textEl.value = '';
     renderItTrackerAnnouncements();
     displayAnnouncementsOnHome();
@@ -6555,6 +6599,8 @@ function deleteAdminAnnouncement(id) {
     let list = getStoredAnnouncements();
     list = list.filter(a => a.id !== id);
     persistAnnouncements(list);
+    try { if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'announcements-updated', announcements: list }); } catch (e) {}
+    try { syncAnnouncementsToRemote(list); } catch (e) {}
     renderItTrackerAnnouncements();
     displayAnnouncementsOnHome();
     toastNotice('success', 'Deleted', 'Announcement deleted.');
