@@ -4500,7 +4500,7 @@ function renderInventoryReportView() {
                 </td>
                 <td>
                     <div style="display:flex; flex-direction:column; gap:6px;">
-                        <strong style="color:#0f172a;">${row.pc.pcName}</strong>
+                        <strong style="color:#0f172a;">${row.pc.pcName}${row.pc.replacementRemarks ? ` <i class="fas fa-sticky-note" title="${escapeHtml(row.pc.replacementRemarks)}" style="color:#64748b; font-size:12px; margin-left:6px;"></i>` : ''}</strong>
                         <span style="font-size:12px; color:#64748b;">${row.pc.brand || 'Generic'} • ${row.pc.storage}</span>
                     </div>
                 </td>
@@ -4714,7 +4714,12 @@ function renderBranchTableLog(branchName) {
 
         tbody.innerHTML += `
             <tr>
-                <td style="font-weight:700;">${pc.pcName}</td>
+                <td style="font-weight:700;">
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <span style="font-weight:700;">${pc.pcName}</span>
+                        ${pc.replacementRemarks ? `<small style="color:#64748b; font-style:italic;">${escapeHtml(pc.replacementRemarks)}</small>` : ''}
+                    </div>
+                </td>
                 <td><span class="state-indicator ${pc.state === 'Active' ? 'online' : 'offline'}"></span> ${pc.state}</td>
                 <td><span style="background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700;">${pc.health}</span></td>
                 <td>${pc.pcProcessor}</td>
@@ -4835,6 +4840,7 @@ function handleNewPcFormSubmission(event) {
     const pcTemp = Number(document.getElementById("pcTemp").value);
     const processorTemp = Number(document.getElementById("processorTemp").value);
     const username = document.getElementById("username").value.trim();
+    const replacementRemarks = (document.getElementById("replacementRemarks")?.value || '').trim();
 
     // Validation: require these 5 fields specifically
     if (!username) {
@@ -4894,6 +4900,8 @@ function handleNewPcFormSubmission(event) {
         warrantyDaysRemaining: assetInfo.warrantyDaysRemaining
     };
 
+    if (replacementRemarks) newPc.replacementRemarks = replacementRemarks;
+
     pcData[branch] = pcData[branch] || [];
     pcData[branch].push(newPc);
 
@@ -4920,6 +4928,7 @@ function handleNewPcFormSubmission(event) {
             freeSpace: `${freeSpaceNum}GB`,
             temp: pcTemp,
             username: username
+            , replacementRemarks: replacementRemarks || undefined
         }
     });
 
@@ -5029,6 +5038,7 @@ function commitFloatingPcUpdate() {
             freeSpace: updatedFreeSpace,
             temp: updatedTemp,
             username: pc.username
+            // replacementRemarks will be appended below if provided
         }
     });
 
@@ -5042,6 +5052,19 @@ function commitFloatingPcUpdate() {
     pc.freeSpace = updatedFreeSpace;
     pc.pcTemp = updatedTemp;
     pc.processorTemp = updatedTemp + 5;
+    // Save replacement remarks if supplied
+    const updatedReplacementRemarks = (document.getElementById("modalReplacementRemarks")?.value || '').trim();
+    if (updatedReplacementRemarks) {
+        // append to modificationHistory last pushed entry details
+        try {
+            const last = modificationHistory[modificationHistory.length - 1];
+            if (last && last.details) last.details.replacementRemarks = updatedReplacementRemarks;
+        } catch (e) {}
+        pc.replacementRemarks = updatedReplacementRemarks;
+    } else {
+        // clear existing if blank
+        if (pc.replacementRemarks) delete pc.replacementRemarks;
+    }
 
     // Persist changes
     localStorage.setItem("pcData", JSON.stringify(pcData));
@@ -5173,6 +5196,7 @@ function loadSelectedPcDetailsForEditing() {
     document.getElementById("modalStorage").value = pc.storage || "";
     document.getElementById("modalCapacity").value = parseInt(pc.capacity) || "";
     document.getElementById("modalFreeSpace").value = parseInt(pc.freeSpace) || "";
+    document.getElementById("modalReplacementRemarks").value = pc.replacementRemarks || "";
 }
 
 function normalizeGbString(rawValue, fallback) {
@@ -5975,6 +5999,11 @@ function loadAdminBranchData() {
                             <div><span style="display:block; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;">Total Capacity</span> <strong style="color:#334155;">${currentCapacity}</strong>${getDeltaTag(fieldChanged('capacity'))}</div>
                             <div><span style="display:block; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;">Remaining Free Space</span> <span style="font-weight:700; color:#0369a1;">${currentFreeSpace}</span>${getDeltaTag(fieldChanged('freeSpace'))}</div>
                         </div>
+                        ${current.replacementRemarks ? `
+                        <div style="margin-top:10px; padding:12px; background:#f8fafc; border:1px solid #e6eef8; border-radius:6px;">
+                            <div style="font-size:12px; color:#64748b; font-weight:700; margin-bottom:6px;">Replacement Remarks</div>
+                            <div style="font-size:13px; color:#334155;">${escapeHtml(String(current.replacementRemarks || ''))}</div>
+                        </div>` : ''}
                     </div>
                 </div>`;
         });

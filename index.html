@@ -237,6 +237,7 @@
                         <div class="form-element"><label for="freeSpace">Free Space (GB)</label><input type="number" min="0" step="1" id="freeSpace" required placeholder="e.g. 45"></div>
                         <div class="form-element"><label for="pcTemp">Chassis Temp (°C)</label><input type="number" id="pcTemp" required placeholder="e.g. 42"></div>
                         <div class="form-element"><label for="processorTemp">CPU Temp (°C)</label><input type="number" id="processorTemp" required placeholder="e.g. 47"></div>
+                        <div class="form-element"><label for="replacementRemarks">Replacement Remarks (optional)</label><textarea id="replacementRemarks" placeholder="Notes for replacement or special instructions" style="width:100%; min-height:64px; padding:8px; border-radius:8px; border:1px solid #cbd5e1;"></textarea></div>
                     </div>
                     <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                         <button type="button" class="delete-btn" style="padding:12px 24px;" onclick="document.getElementById('pcFormContainer').classList.add('hidden')">Cancel</button>
@@ -1427,6 +1428,11 @@
                 <div class="form-element">
                     <label style="font-weight: 600; font-size: 13px;">Chassis Temperature (°C)</label>
                     <input type="number" id="modalPcTemp" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e1;">
+                </div>
+
+                <div class="form-element">
+                    <label style="font-weight: 600; font-size: 13px;">Replacement Remarks (optional)</label>
+                    <textarea id="modalReplacementRemarks" placeholder="Optional replacement notes or instructions" style="width:100%; min-height:80px; padding:8px; border-radius:8px; border:1px solid #cbd5e1;"></textarea>
                 </div>
             </div>
 
