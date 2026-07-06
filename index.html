@@ -139,7 +139,21 @@
                 </div>
             </div>
 
-            <div id="profileGrid" class="profile-grid"></div>
+            <div class="team-overview">
+                <div class="staff-showcase">
+                    <div id="profileGrid" class="profile-grid"></div>
+                </div>
+                <aside id="homeAnnouncements" class="home-announcements">
+                    <div class="announcement-heading">
+                        <div>
+                            <h4>Announcements</h4>
+                            <p>Latest administrative announcements will appear here.</p>
+                        </div>
+                        <i class="fas fa-bullhorn"></i>
+                    </div>
+                    <div id="homeAnnouncementList" class="announcement-list"></div>
+                </aside>
+            </div>
 
             <div class="branch-map-toolbar">
                 <div class="branch-search-box">
@@ -159,66 +173,6 @@
 
             <div class="home-hero">
                 <div id="bhfMapContainer" class="hero-visual hero-map" style="position: relative; z-index: 10;"></div>
-                <div id="homeAnnouncements" class="home-announcements">
-                    <h4 style="margin:0 0 8px 0;">Announcements</h4>
-                    <p style="margin:0 0 14px 0; color:#64748b; font-size:13px;">Latest administrative announcements will appear here.</p>
-                    <div id="homeAnnouncementList" style="max-height: calc(min(760px,60vh) - 100px); overflow-y:auto;"></div>
-                </div>
-            </div>
-
-            <div class="home-stats-grid">
-                <div class="home-stat-card">
-                    <div class="stat-icon bg-blue"><i class="fas fa-user-cog"></i></div>
-                    <div class="stat-copy">
-                        <h4 id="homeStaffCount">3 IT Specialists</h4>
-                        <p>Staff deployed across key branches and operations.</p>
-                    </div>
-                </div>
-                <div class="home-stat-card">
-                    <div class="stat-icon bg-green"><i class="fas fa-map-marker-alt"></i></div>
-                    <div class="stat-copy">
-                        <h4>12 Active Branches</h4>
-                        <p>Locations monitored for health, maintenance and support performance.</p>
-                    </div>
-                </div>
-                <div class="home-stat-card">
-                    <div class="stat-icon bg-yellow"><i class="fas fa-comments-alt"></i></div>
-                    <div class="stat-copy">
-                        <h4>Live Task Updates</h4>
-                        <p>Each tracker update appears immediately on the home dashboard.</p>
-                    </div>
-                </div>
-            </div>
-
-
-            <div class="section-title-bar" style="margin-top:40px;">
-                <div>
-                    <h2>Featured Branches</h2>
-                    <p>A selection of active branch destinations supported by the IT team.</p>
-                </div>
-            </div>
-
-            <div class="branch-showcase-grid">
-                <div class="branch-card" style="background-image:url('https://i.pinimg.com/736x/b9/92/ec/b992ecfad277b180c7c3f1067d4073f6.jpg');">
-                    <div class="branch-label">Lending</div>
-                    <h3>BHF LENDING</h3>
-                </div>
-                <div class="branch-card" style="background-image:url('https://i.pinimg.com/736x/62/55/aa/6255aa0f2d262aa97fb118d44d467061.jpg');">
-                    <div class="branch-label">Hospitality</div>
-                    <h3>Bloomfield Hotel</h3>
-                </div>
-                <div class="branch-card" style="background-image:url('https://i.pinimg.com/736x/90/60/1a/90601aa9f460275b5158fbbd860188cb.jpg');">
-                    <div class="branch-label">Food & Beverage</div>
-                    <h3>Cafe Leche</h3>
-                </div>
-                <div class="branch-card" style="background-image:url('images/pawnshop-logo.svg'); background-size: cover; background-position: center;">
-                    <div class="branch-label">Retail</div>
-                    <h3>Pawnshop Bonifacio</h3>
-                </div>
-                <div class="branch-card" style="background-image:url('images/bonifacio217-logo.svg'); background-size: cover; background-position: center;">
-                    <div class="branch-label">Residences</div>
-                    <h3>217 Bonifacio Residences</h3>
-                </div>
             </div>
         </section>
 
@@ -1098,6 +1052,29 @@
     </main>
 
     <div id="systemNoticeContainer" class="system-notice-container"></div>
+    <footer class="home-footer">
+        <div class="footer-brand">
+            <div class="footer-brand__icon"><img src="/images/BHFlogo.jpg" alt="BHF logo" class="footer-logo"></div>
+            <div>
+                <h3>BHF Infrastructure Hub</h3>
+                <p>Reliable support, branch visibility, and rapid operational oversight in one place.</p>
+            </div>
+        </div>
+        <div class="footer-links">
+            <div>
+                <h4>Support</h4>
+                <a href="#">Ticket Portal</a>
+                <a href="#">IT Tracker</a>
+                <a href="#">Branch Monitoring</a>
+            </div>
+            <div>
+                <h4>Contact</h4>
+                <a href="#"><i class="fas fa-envelope"></i> support@bhfgroup.com</a>
+                <a href="#"><i class="fas fa-phone-alt"></i> +63 2 8888 1111</a>
+                <a href="#"><i class="fas fa-map-marker-alt"></i> Bonifacio Global City</a>
+            </div>
+        </div>
+    </footer>
 
     <div id="staffProfileModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="staffProfileTitle">
         <div class="staff-profile-modal">
