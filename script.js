@@ -196,6 +196,30 @@ async function initializeRemoteSync() {
                 if (typeof loadAdminBranchData === 'function') loadAdminBranchData();
             }, (err) => console.error('History pipeline subscription error:', err));
         } catch (e) { console.warn('History dynamic registration hook blocked:', e); }
+        // ------------------------------------------------------------------
+        // NEW: Real-Time Sync Streams for Workstation Data Matrix (pcData)
+        // ------------------------------------------------------------------
+        try {
+            const pcRef = firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc);
+            pcRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !data.pcData) return;
+                
+                // Overwrite local dataset memory with the global database cloud truth
+                pcData = data.pcData;
+                localStorage.setItem("pcData", JSON.stringify(pcData));
+                
+                // INSTANT FIX: Re-renders tables, grid, metrics, and Immediate Action panels globally
+                if (typeof refreshAllViews === 'function') {
+                    refreshAllViews();
+                } else {
+                    // Fallbacks to manually force update layout modules if nested
+                    if (typeof renderBranchGridDashboard === 'function') renderBranchGridDashboard();
+                    if (typeof updateOverallSummaryMetrics === 'function') updateOverallSummaryMetrics();
+                }
+            }, (err) => console.error('PC remote snapshot subscription failed:', err));
+        } catch (e) { console.warn('PC live listener attachment blocked:', e); }
 
         updateRemoteSyncStatusDisplay('ok', 'Connected to Firestore');
     } catch (e) {
@@ -612,14 +636,20 @@ window.addEventListener('storage', (e) => {
     }
 });
 // NEW: Uploads updated PC states to the cloud database for all connected users
+// NEW: Uploads the primary computer registry data globally to Firestore
 async function pushPcDataToCloud() {
+    // 1. Keep local storage updated
     localStorage.setItem("pcData", JSON.stringify(pcData));
+    
+    // 2. Upload to Firestore so all other users/admins instantly receive it
     if (isRemoteSyncActive()) {
         try {
             await firestoreDb.collection(FIREBASE_PCDATA_DOC.collection)
                              .doc(FIREBASE_PCDATA_DOC.doc)
                              .set({ pcData: pcData }, { merge: true });
-        } catch (e) { console.error("Cloud data save exception:", e); }
+        } catch (e) { 
+            console.error("Cloud snapshot upload failed for pcData:", e); 
+        }
     }
 }
 
