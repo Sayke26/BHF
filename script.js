@@ -40,6 +40,15 @@ const FIREBASE_ANNOUNCEMENTS_DOC = {
     collection: 'sharedState',
     doc: 'adminAnnouncements'
 };
+// NEW: Global database collection documents for multi-client terminal tracking
+const FIREBASE_PCDATA_DOC = {
+    collection: 'sharedState',
+    doc: 'pcDatabase'
+};
+const FIREBASE_HISTORY_DOC = {
+    collection: 'sharedState',
+    doc: 'auditHistory'
+};
 let firebaseApp = null;
 let firestoreDb = null;
 let remoteSyncApplying = false;
@@ -150,6 +159,43 @@ async function initializeRemoteSync() {
                 }
             }, (err) => console.error('Announcements sync error', err));
         } catch (e) { console.warn('Announcements listener not attached', e); }
+        // ------------------------------------------------------------------
+        // NEW: Real-Time Sync Streams for All User Dashboard Windows (pcData)
+        // ------------------------------------------------------------------
+        try {
+            const pcRef = firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc);
+            pcRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !data.pcData) return;
+                
+                // Write the synchronized remote snapshot data to local cache memory
+                pcData = data.pcData;
+                localStorage.setItem("pcData", JSON.stringify(pcData));
+                
+                // Instantly re-render charts, tables, and metric summary modules across screens
+                if (typeof refreshAllViews === 'function') refreshAllViews();
+            }, (err) => console.error('PC remote pipeline subscription error:', err));
+        } catch (e) { console.warn('PC dynamic registration hook blocked:', e); }
+
+        // ------------------------------------------------------------------
+        // NEW: Real-Time Sync Streams for All Active Admin History Modules
+        // ------------------------------------------------------------------
+        try {
+            const historyRef = firestoreDb.collection(FIREBASE_HISTORY_DOC.collection).doc(FIREBASE_HISTORY_DOC.doc);
+            historyRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !Array.isArray(data.history)) return;
+                
+                // Synchronize global ledgers locally
+                modificationHistory = data.history;
+                localStorage.setItem("modificationHistory", JSON.stringify(modificationHistory));
+                
+                // Refresh the logging rows table automatically
+                if (typeof loadAdminBranchData === 'function') loadAdminBranchData();
+            }, (err) => console.error('History pipeline subscription error:', err));
+        } catch (e) { console.warn('History dynamic registration hook blocked:', e); }
 
         updateRemoteSyncStatusDisplay('ok', 'Connected to Firestore');
     } catch (e) {
@@ -548,8 +594,9 @@ function ensureModificationHistoryHasUserTracking() {
 }
 
 // Helper to persist modification history and notify admin UI immediately
+// MODIFIED: Saves logging statements to local memory and broadcasts to Cloud Firestore
 function persistModificationHistory() {
-    localStorage.setItem("modificationHistory", JSON.stringify(modificationHistory));
+    pushHistoryToCloud(); // NEW: Triggers cloud snapshot syncing
     try { loadAdminBranchData(); } catch (e) {}
     try { window.dispatchEvent(new Event('modHistoryUpdated')); } catch(e) {}
 }
@@ -564,6 +611,29 @@ window.addEventListener('storage', (e) => {
         try { renderStaffFeedbackHistoryPage(); } catch (err) { /* ignore if page not ready */ }
     }
 });
+// NEW: Uploads updated PC states to the cloud database for all connected users
+async function pushPcDataToCloud() {
+    localStorage.setItem("pcData", JSON.stringify(pcData));
+    if (isRemoteSyncActive()) {
+        try {
+            await firestoreDb.collection(FIREBASE_PCDATA_DOC.collection)
+                             .doc(FIREBASE_PCDATA_DOC.doc)
+                             .set({ pcData: pcData }, { merge: true });
+        } catch (e) { console.error("Cloud data save exception:", e); }
+    }
+}
+
+// NEW: Uploads updated system logs to the cloud database for all connected admins
+async function pushHistoryToCloud() {
+    localStorage.setItem("modificationHistory", JSON.stringify(modificationHistory));
+    if (isRemoteSyncActive()) {
+        try {
+            await firestoreDb.collection(FIREBASE_HISTORY_DOC.collection)
+                             .doc(FIREBASE_HISTORY_DOC.doc)
+                             .set({ history: modificationHistory });
+        } catch (e) { console.error("Cloud logging save exception:", e); }
+    }
+}
 
 let selectedBranchGlobal = branches[0];
 let activeMetricSummaryKey = null;
@@ -6711,3 +6781,5 @@ function displayAnnouncementsOnHome() {
 }
 
 function clearAnnouncementDraft() { const el = document.getElementById('announcementText'); if (el) el.value = ''; }
+
+pushPcDataToCloud(); // Syncs the deletion instantly to all monitoring windows
