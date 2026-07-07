@@ -114,14 +114,22 @@ async function initializeRemoteSync() {
             console.debug('[RemoteSync] onSnapshot received', { exists: snapshot.exists });
             if (!snapshot.exists) return;
             const remoteData = snapshot.data();
-            console.debug('[RemoteSync] remoteData', remoteData);
             if (!remoteData || typeof remoteData.profiles !== 'object') return;
 
-            remoteSyncApplying = true;
-            try {
-                syncLocalStaffProfiles(remoteData.profiles);
-            } finally {
-                remoteSyncApplying = false;
+            // Only apply updates if the data is actually different from local memory
+            const currentLocal = localStorage.getItem("itStaffProfiles");
+            const remoteString = JSON.stringify(remoteData.profiles);
+
+            if (currentLocal !== remoteString) {
+                remoteSyncApplying = true;
+                try {
+                    syncLocalStaffProfiles(remoteData.profiles);
+                    
+                    // Smoothly refresh the UI view structures
+                    if (typeof updateITProfilesDisplay === 'function') updateITProfilesDisplay();
+                } finally {
+                    remoteSyncApplying = false;
+                }
             }
         }, (error) => {
             console.error('Firebase shift sync error:', error);
@@ -2453,7 +2461,51 @@ function resetITTrackerForm() {
 }
 
 function updateITProfilesDisplay() {
-    renderITStaffProfileGrid();
+    const container = document.getElementById('staffProfilesHomeContainer');
+    if (!container) return;
+
+    // Fetch live items
+    const rawProfiles = getStoredStaffProfiles() || {};
+    let profiles = Object.values(rawProfiles);
+
+    // 1. FIXED LAYOUT: Sort profiles so Sir Ali always comes first
+    profiles.sort((a, b) => {
+        const nameA = (a.name || '').toLowerCase();
+        const nameB = (b.name || '').toLowerCase();
+        if (nameA.includes('ali')) return -1;
+        if (nameB.includes('ali')) return 1;
+        return 0; 
+    });
+
+    if (profiles.length === 0) {
+        container.innerHTML = '<div style="grid-column:1/-1; padding:20px; text-align:center; color:#64748b;">No staff profiles available.</div>';
+        return;
+    }
+
+    // 2. PREVENT BLINKING: Create the layout markup
+    const targetHtml = profiles.map(p => {
+        const initials = p.name ? p.name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() : 'IT';
+        const avatarHtml = p.image ? `<img src="${p.image}" alt="${p.name || 'IT'}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;" />` : initials;
+        const currentStatus = p.status || (p.location ? 'Active' : 'Offline');
+        const statusColor = currentStatus === 'Active' ? '#22c55e' : '#ef4444';
+
+        return `
+            <div class="staff-card" data-profile-id="${p.id || ''}">
+                <div class="staff-avatar">${avatarHtml}</div>
+                <div class="staff-info">
+                    <div class="staff-name">${p.name || 'Unnamed'}</div>
+                    <div class="staff-role">${p.role || 'IT Staff'}</div>
+                    <div style="font-size:12px; margin-top:4px; font-weight:600; color:${statusColor};">
+                         ● ${currentStatus}
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    // Only update DOM if HTML is genuinely different (stops the blinking/flickering)
+    if (container.innerHTML !== targetHtml) {
+        container.innerHTML = targetHtml;
+    }
 }
 
 function openStaffProfileModal(staffKey) {
