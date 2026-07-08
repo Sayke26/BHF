@@ -1168,11 +1168,10 @@ function populateITTrackerControls() {
         const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
         // Exclude disabled profiles from tracker selection
         const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
-        
+        const previousValue = staffSelect.value || '';
+
         if (currentUser) {
-            // If Ali is signed in, allow selecting any active (live) staff to deploy
             if (currentUser === 'ali') {
-                // Show all staff; enable Ali's own option even if not active so he can select himself
                 const optionHtml = profiles.map(profile => {
                     const status = profile.shiftStatus || (profile.location ? 'live' : 'offline');
                     const isActive = status === 'live' || status === 'standby';
@@ -1183,19 +1182,26 @@ function populateITTrackerControls() {
                 }).join('');
                 staffSelect.innerHTML = '<option value="">-- Choose staff --</option>' + optionHtml;
                 staffSelect.disabled = false;
+                if (previousValue && profiles.some(p => p.id === previousValue)) {
+                    staffSelect.value = previousValue;
+                } else if (profiles.find(p => p.id === currentUser)) {
+                    staffSelect.value = currentUser;
+                }
             } else {
-                // When other users are logged in, only show their own profile
+                // Other users can always access their own profile and keep it selected.
                 const currentProfile = profiles.find(p => p.id === currentUser);
                 if (currentProfile) {
                     staffSelect.innerHTML = `<option value="${currentProfile.id}">${currentProfile.name} (Your Profile)</option>`;
+                    staffSelect.disabled = false;
                     staffSelect.value = currentProfile.id;
-                    staffSelect.disabled = true; // Prevent changing selection
                 }
             }
         } else {
-            // When not logged in, show all profiles with a placeholder
             staffSelect.innerHTML = '<option value="">-- Choose a staff member --</option>' + profiles.map(profile => `<option value="${profile.id}">${profile.name}</option>`).join('');
             staffSelect.disabled = false;
+            if (previousValue && profiles.some(p => p.id === previousValue)) {
+                staffSelect.value = previousValue;
+            }
         }
     }
     if (locationSelect) {
@@ -2225,17 +2231,19 @@ function updateITTrackerFields() {
 }
 
 function startShiftForSelectedStaff() {
-    // Prefer the selected staff in the IT Tracker UI, but fall back to the currently
-    // signed-in admin profile when invoked from the admin dropdown.
     const staffSelect = document.getElementById('itTrackerStaffSelect');
     const locationSelect = document.getElementById('itTrackerLocationSelect');
     const remarksText = document.getElementById('itTrackerRemarksText');
 
     let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
     if (!selectedStaff) {
-        // Use the logged-in admin's profile key if available
         const adminKey = getCurrentAdminKey();
-        if (adminKey) selectedStaff = adminKey;
+        if (adminKey === 'ali') {
+            const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled && p.id !== 'ali');
+            if (profiles.length) selectedStaff = profiles[0].id;
+        } else if (adminKey) {
+            selectedStaff = adminKey;
+        }
     }
     if (!selectedStaff) {
         toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
@@ -2644,13 +2652,26 @@ function resetITTrackerForm() {
     const linkInput = document.getElementById('itTrackerLinkInput');
     const photoInput = document.getElementById('itTrackerPhotoInput');
 
-    if (staffSelect) staffSelect.value = '';
+    if (staffSelect) {
+        const currentUser = getCurrentAdminKey();
+        const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
+        const currentValue = staffSelect.value || '';
+        const fallbackValue = currentUser && profiles.some(p => p.id === currentUser) ? currentUser : '';
+        if (currentValue && profiles.some(p => p.id === currentValue)) {
+            staffSelect.value = currentValue;
+        } else if (fallbackValue) {
+            staffSelect.value = fallbackValue;
+        } else {
+            staffSelect.value = '';
+        }
+    }
     if (locationSelect) locationSelect.value = '';
     if (remarksText) remarksText.value = '';
     if (phoneInput) phoneInput.value = '';
     if (emailInput) emailInput.value = '';
     if (linkInput) linkInput.value = '';
     if (photoInput) photoInput.value = '';
+    try { updateITTrackerFields(); } catch (e) {}
 }
 
 function updateITProfilesDisplay() {
@@ -6879,12 +6900,16 @@ function refreshAllViews() {
 }
 
 function endShiftForSelectedStaff() {
-    // Allow ending the shift for the currently selected staff or the logged-in admin
     const staffSelect = document.getElementById('itTrackerStaffSelect');
     let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
     if (!selectedStaff) {
         const adminKey = getCurrentAdminKey();
-        if (adminKey) selectedStaff = adminKey;
+        if (adminKey === 'ali') {
+            const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled && p.id !== 'ali');
+            if (profiles.length) selectedStaff = profiles[0].id;
+        } else if (adminKey) {
+            selectedStaff = adminKey;
+        }
     }
     if (!selectedStaff) {
         toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
@@ -6914,12 +6939,16 @@ function endShiftForSelectedStaff() {
 }
 
 function setOnLeaveForSelectedStaff() {
-    // Allow marking as On Leave for the selected staff or the logged-in admin
     const staffSelect = document.getElementById('itTrackerStaffSelect');
     let selectedStaff = (staffSelect && staffSelect.value) ? staffSelect.value : '';
     if (!selectedStaff) {
         const adminKey = getCurrentAdminKey();
-        if (adminKey) selectedStaff = adminKey;
+        if (adminKey === 'ali') {
+            const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled && p.id !== 'ali');
+            if (profiles.length) selectedStaff = profiles[0].id;
+        } else if (adminKey) {
+            selectedStaff = adminKey;
+        }
     }
     if (!selectedStaff) {
         toastNotice('warning', 'Missing Selection', 'Please select an IT staff member first.');
