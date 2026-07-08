@@ -201,6 +201,77 @@ async function initializeRemoteSync() {
                 }
             }
         }
+        // ------------------------------------------------------------------
+        // Ensure pcData is sourced from Firestore. If remote exists use it;
+        // otherwise migrate any existing local `pcData` into Firestore so data is real.
+        // ------------------------------------------------------------------
+        try {
+            const pcRefInit = firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc);
+            const pcSnap = await pcRefInit.get();
+            if (pcSnap.exists) {
+                const data = pcSnap.data();
+                if (data && data.pcData) {
+                    pcData = data.pcData;
+                    try { localStorage.setItem('pcData', JSON.stringify(pcData)); } catch (e) {}
+                    try { if (typeof scheduleRefreshAllViews === 'function') scheduleRefreshAllViews(200); } catch (e) {}
+                }
+            } else {
+                try {
+                    const localRaw = localStorage.getItem('pcData');
+                    if (localRaw) {
+                        const localObj = JSON.parse(localRaw || '{}');
+                        if (localObj && Object.keys(localObj).length > 0) {
+                            await pcRefInit.set({ pcData: localObj }, { merge: true });
+                            console.info('Migrated local pcData → Firestore sharedState/pcDatabase');
+                        }
+                    }
+                } catch (e) { console.warn('pcData migration failed', e); }
+            }
+        } catch (e) { console.warn('pcData initial sync check failed', e); }
+            // ------------------------------------------------------------------
+            // Migrate announcements and modification history if remote missing
+            // ------------------------------------------------------------------
+            try {
+                const annRefInit = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
+                const annSnap = await annRefInit.get();
+                if (annSnap.exists) {
+                    const data = annSnap.data();
+                    if (data && Array.isArray(data.announcements)) {
+                        persistAnnouncements(data.announcements || []);
+                        renderItTrackerAnnouncements();
+                        displayAnnouncementsOnHome();
+                    }
+                } else {
+                    try {
+                        const localList = getStoredAnnouncements();
+                        if (Array.isArray(localList) && localList.length > 0) {
+                            await annRefInit.set({ announcements: localList }, { merge: true });
+                            console.info('Migrated local announcements → Firestore');
+                        }
+                    } catch (e) { console.warn('announcements migration failed', e); }
+                }
+            } catch (e) { console.warn('announcements initial sync check failed', e); }
+
+            try {
+                const historyRefInit = firestoreDb.collection(FIREBASE_HISTORY_DOC.collection).doc(FIREBASE_HISTORY_DOC.doc);
+                const historySnap = await historyRefInit.get();
+                if (historySnap.exists) {
+                    const data = historySnap.data();
+                    if (data && Array.isArray(data.history)) {
+                        modificationHistory = data.history;
+                        try { localStorage.setItem('modificationHistory', JSON.stringify(modificationHistory)); } catch (e) {}
+                        try { if (typeof loadAdminBranchData === 'function') loadAdminBranchData(); } catch (e) {}
+                    }
+                } else {
+                    try {
+                        const localHist = JSON.parse(localStorage.getItem('modificationHistory') || '[]');
+                        if (Array.isArray(localHist) && localHist.length > 0) {
+                            await historyRefInit.set({ history: localHist }, { merge: true });
+                            console.info('Migrated local modificationHistory → Firestore');
+                        }
+                    } catch (e) { console.warn('modificationHistory migration failed', e); }
+                }
+            } catch (e) { console.warn('history initial sync check failed', e); }
         // Listen for announcements doc changes as well
         try {
             const annRef = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
@@ -714,7 +785,10 @@ function generateMockDatabase() {
     return defaultData;
 }
 
-let pcData = JSON.parse(localStorage.getItem("pcData")) || generateMockDatabase();
+// Load pcData from localStorage if present. Do NOT generate mock data by default.
+let pcData = null;
+try { pcData = JSON.parse(localStorage.getItem('pcData') || 'null'); } catch (e) { pcData = null; }
+if (!pcData) pcData = {};
 let modificationHistory = JSON.parse(localStorage.getItem("modificationHistory")) || [];
 let broadcastRemarks = JSON.parse(localStorage.getItem("broadcastRemarks")) || [];
 
