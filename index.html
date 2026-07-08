@@ -42,6 +42,11 @@
                 <p>IT Infrastructure Performance Portal</p>
             </div>
         </div>
+        <div id="sideMenuToggle" aria-label="Open menu" title="Menu" role="button" onclick="toggleSideMenu()">
+            <span class="bar"></span>
+            <span class="bar"></span>
+            <span class="bar"></span>
+        </div>
         <nav class="nav-links">
             <button id="legacyAdminNavBtn" class="admin-nav-btn" onclick="window.open('https://website-3454c1c0.tzf.yar.mybluehost.me/','_blank')"><i class="fas fa-ticket-alt"></i> Submit A Ticket</button>
             <button id="adminSummaryBtn" onclick="showOverallSummary()" class="admin-nav-btn hidden"><i class="fas fa-network-wired"></i> Admin</button>
@@ -71,17 +76,12 @@
         </nav>
     </header>
 
-    <!-- Left side menu toggle + panel -->
-    <div id="sideMenuToggle" aria-label="Open menu" title="Menu" role="button" onclick="toggleSideMenu()">
-        <span class="bar"></span>
-        <span class="bar"></span>
-        <span class="bar"></span>
-    </div>
     <nav id="sideMenu" class="side-menu hidden" aria-hidden="true">
         <button id="homeNavBtnSide" class="side-nav-btn" onclick="goHome(); closeSideMenu();"><i class="fas fa-home"></i> Home</button>
         <button id="analysisNavBtnSide" class="side-nav-btn" onclick="showAnalysisPage(); closeSideMenu();"><i class="fas fa-chart-line"></i> Analysis</button>
         <button id="itTrackerNavBtnSide" class="side-nav-btn" onclick="showITTrackerPage(); closeSideMenu();"><i class="fas fa-user-friends"></i> IT Tracker</button>
         <button id="configNavBtnSide" class="side-nav-btn" onclick="promptAdminAccess(); closeSideMenu();"><i class="fas fa-cog"></i> Computer Monitoring</button>
+        <button id="userListsNavBtnSide" class="side-nav-btn" onclick="showUserListsPage(); closeSideMenu();"><i class="fas fa-users"></i> User Lists</button>
         <button id="inventoryReportNavBtnSide" class="side-nav-btn" onclick="showInventoryReportPage(); closeSideMenu();"><i class="fas fa-boxes"></i> Inventory Report</button>
         <button id="logoutBtnSide" class="side-nav-btn" style="background:#dc2626; color:white; border-color:#dc2626;" onclick="logoutAdmin(); closeSideMenu();"><i class="fas fa-sign-out-alt"></i> Log-out</button>
     </nav>
@@ -162,17 +162,18 @@
                         <select id="homeBranchSelect" onchange="handleHomeBranchSelection(this.value)">
                             <option value="">Select branch to view...</option>
                         </select>
-                        <button id="homeBranchResetBtn" type="button" onclick="resetHomeBranchSelection()">Reset</button>
+                        <button id="homeBranchResetBtn" type="button" onclick="resetHomeBranchSelection()">Recenter</button>
                     </div>
                 </div>
-                <div class="branch-map-legend">
-                    <div><span class="legend-chip branch-chip"></span>Branch Site</div>
-                    <div><span class="legend-chip staff-chip"></span>Live IT Team</div>
-                </div>
-            </div>
+            </div>s
 
             <div class="home-hero">
-                <div id="bhfMapContainer" class="hero-visual hero-map" style="position: relative; z-index: 10;"></div>
+                <div id="bhfMapContainer" class="hero-visual hero-map" style="position: relative; z-index: 10;">
+                    <div class="branch-map-legend map-legend-overlay">
+                        <div><span class="legend-chip branch-chip"></span>Branch Site</div>
+                        <div><span class="legend-chip staff-chip"></span>IT Current Location</div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -405,9 +406,9 @@
                     <select id="analysisBranchSelect" onchange="renderAnalysisView()"></select>
                 </div>
                 <div class="form-element" style="min-width:220px; flex:1; display:grid; gap:10px;">
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <button id="analysisOpenCompareBtn" type="button" class="add-btn" style="background:#16a34a; color:white; border:none; padding:14px 18px; font-size:14px;">Generate Comparison</button>
-                        <button id="analysisOpenAdvancedBtn" type="button" class="add-btn" style="background:#475569; color:white; border:none; padding:14px 18px; font-size:14px;" onclick="showAdvancedHealthDashboard()">Show Advanced Health &amp; Maintenance Dashboard</button>
+                    <div class="analysis-toolbar-row">
+                        <button id="analysisOpenCompareBtn" type="button" class="add-btn analysis-toolbar-btn" style="background:#16a34a; color:white; border:none;">Generate Comparison</button>
+                        <button id="analysisOpenAdvancedBtn" type="button" class="add-btn analysis-toolbar-btn" style="background:#475569; color:white; border:none;" onclick="showAdvancedHealthDashboard()">Advanced</button>
                     </div>
                     <small id="analysisCompareSummary" style="display:block; color:#64748b; font-size:13px;">Choose months, select branch scope, then generate comparison.</small>
                 </div>
@@ -436,21 +437,23 @@
                 </div>
             </div>
 
-            <div class="chart-grid">
-                <div class="chart-box">
-                    <h3>Issue Volume by Branch</h3>
-                    <div class="chart-canvas-wrapper"><canvas id="analysisBranchIssuesChart"></canvas></div>
-                </div>
-                <div class="chart-box">
-                    <h3>Performance Trend</h3>
-                    <div class="chart-canvas-wrapper"><canvas id="analysisPerformanceChart"></canvas></div>
+            <div class="chart-grid analysis-chart-grid">
+                <div class="chart-box analysis-chart-box">
+                    <div class="chart-title-row">
+                        <h3>Issue Volume by Branch</h3>
+                        <span class="chart-caption">Issue counts for each branch in the selected period</span>
+                    </div>
+                    <div class="chart-canvas-wrapper chart-canvas-wrapper-large analysis-branch-chart-wrapper"><canvas id="analysisBranchIssuesChart"></canvas></div>
                 </div>
             </div>
 
-            <div class="chart-grid">
-                <div class="chart-box">
-                    <h3>Problem Category Breakdown</h3>
-                    <div class="chart-canvas-wrapper"><canvas id="analysisProblemCategoryChart"></canvas></div>
+            <div class="chart-grid analysis-chart-grid">
+                <div class="chart-box analysis-chart-box">
+                    <div class="chart-title-row">
+                        <h3>Problem Category Breakdown</h3>
+                        <span class="chart-caption">Category share shown with counts and percentages</span>
+                    </div>
+                    <div class="chart-canvas-wrapper chart-canvas-wrapper-large"><canvas id="analysisProblemCategoryChart"></canvas></div>
                 </div>
             </div>
 
@@ -700,6 +703,7 @@
                             <button type="button" class="secondary-btn" onclick="openFeedbackQuestionModal();"><i class="fas fa-question-circle"></i> Feedback Settings</button>
                             <button type="button" class="secondary-btn" onclick="showStaffFeedbackHistoryPage();"><i class="fas fa-comments"></i> Feedbacks</button>
                             <button id="itTrackerLogHistoryBtn" type="button" class="secondary-btn hidden" onclick="openITTrackerLogHistoryModal();"><i class="fas fa-history"></i> Shift Log History</button>
+                            <button id="itTrackerActivitiesBtn" type="button" class="secondary-btn hidden" onclick="openITTrackerActivitiesModal();"><i class="fas fa-tasks"></i> Activities</button>
                         </div>
                         <div class="it-tracker-toolbar-badge">
                             <i class="fas fa-cogs"></i> Organized support operations
@@ -732,7 +736,6 @@
                             <button type="button" class="secondary-btn" onclick="startShiftForSelectedStaff();"><i class="fas fa-play-circle"></i> Start Shift</button>
                             <button type="button" class="secondary-btn" onclick="endShiftForSelectedStaff();"><i class="fas fa-power-off"></i> End Shift</button>
                             <button type="button" class="secondary-btn" onclick="setOnLeaveForSelectedStaff();"><i class="fas fa-plane-departure"></i> On Leave</button>
-                            <button type="button" class="delete-btn" onclick="removeCurrentITStaff();"><i class="fas fa-user-slash"></i> Disable Staff</button>
                         </div>
                     </div>
                 </div>
@@ -744,6 +747,22 @@
                     <div class="form-element">
                         <label for="announcementText">Announcement Text</label>
                         <textarea id="announcementText" rows="4" placeholder="Type announcement for staff and branches..."></textarea>
+                    </div>
+                    <div class="form-element">
+                        <label>Branch (optional)</label>
+                        <button id="announcementBranchButton" type="button" class="secondary-btn" onclick="openAnnouncementBranchModal();"><i class="fas fa-list-check"></i> Select branches</button>
+                        <div id="announcementBranchSummary" class="announcement-branch-summary">No branches selected. Tap to choose.</div>
+                        <small style="display:block; margin-top:6px; color:#475569; font-size:12px;">Choose branches from a scrollable checklist modal.</small>
+                    </div>
+                    <div class="announcement-schedule-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:flex-end; margin-bottom:12px;">
+                        <div class="form-element" style="margin:0;">
+                            <label for="announcementDate">Scheduled Date</label>
+                            <input id="announcementDate" type="date" style="width:100%; padding:12px 14px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; font-size:14px;" />
+                        </div>
+                        <div class="form-element" style="margin:0;">
+                            <label for="announcementTime">Scheduled Time</label>
+                            <input id="announcementTime" type="time" style="width:100%; padding:12px 14px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; font-size:14px;" />
+                        </div>
                     </div>
                     <div style="display:flex; gap:8px; margin-bottom:12px;">
                         <button class="add-btn" type="button" onclick="saveAdminAnnouncement();"><i class="fas fa-save"></i> Save</button>
@@ -757,6 +776,21 @@
                 </div>
             </div>
         </section>
+
+        <div id="announcementBranchModalOverlay" class="modal-overlay hidden" onclick="if (event.target === this) closeAnnouncementBranchModal()">
+            <div class="staff-profile-modal" style="width:min(92vw,560px); max-height:80vh; overflow:hidden;">
+                <button class="modal-close-button" onclick="closeAnnouncementBranchModal();" aria-label="Close branch selector"><i class="fas fa-times"></i></button>
+                <div style="margin-bottom: 18px;">
+                    <h3 style="margin:0 0 6px 0;">Select Branches</h3>
+                    <p style="margin:0; color:#64748b; font-size:14px; line-height:1.6;">Pick one or more branches for this announcement. Leave all unchecked to make it general.</p>
+                </div>
+                <div id="announcementBranchModalList" class="announcement-branch-modal-list"></div>
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:18px; flex-wrap:wrap;">
+                    <button type="button" class="btn-cancel" onclick="closeAnnouncementBranchModal();">Cancel</button>
+                    <button type="button" class="add-btn" onclick="saveAnnouncementBranchSelection();">Save selection</button>
+                </div>
+            </div>
+        </div>
 
         <div id="staffFeedbackCompareModalOverlay" class="modal-overlay hidden">
             <div class="compare-modal-card">
@@ -1050,6 +1084,44 @@
             </div>
         </section>
 
+        <section id="userListsPage" class="page hidden">
+            <div class="section-title-bar">
+                <div>
+                    <h2>User Lists</h2>
+                    <p>Admin roster ordered from IT Manager to IT Support Specialists.</p>
+                </div>
+            </div>
+            <div class="table-frame-panel" style="padding:24px 24px 28px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                    <div>
+                        <h3 style="margin:0;">Admin User Directory</h3>
+                        <p style="margin:6px 0 0 0; color:#475569; font-size:14px;">Includes ID, full name, username, password, and role.</p>
+                    </div>
+                    <div id="userDirectoryActions" style="display:flex; gap:10px; align-items:center;">
+                        <button id="addRoleButton" type="button" class="add-btn" style="background:#2563eb; color:white; display:none;" onclick="openAddRoleModal()"><i class="fas fa-plus"></i> Add Role</button>
+                        <button id="deleteRoleButton" type="button" class="delete-btn" style="display:none;" onclick="openDeleteRoleModal()"><i class="fas fa-trash-alt"></i> Delete Role</button>
+                        <button id="roleChangeDiagBtn" type="button" class="btn-link-action" style="display:inline-flex; align-items:center; gap:8px;" onclick="runRoleChangeDiagnostics()">Check Promote/Demote</button>
+                    </div>
+                </div>
+                <div class="table-container" style="overflow:auto;">
+                    <table class="user-list-table" style="width:100%; min-width:720px; border-collapse:collapse;">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Full Name</th>
+                                <th>Username</th>
+                                <th>Password</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userListsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <div id="systemNoticeContainer" class="system-notice-container"></div>
@@ -1191,6 +1263,22 @@
         </div>
     </div>
 
+    <div id="itTrackerActivitiesModal" class="modal-overlay hidden" onclick="if(event.target === this) closeITTrackerActivitiesModal()">
+        <div class="staff-profile-modal" style="width: min(96vw, 860px);">
+            <button class="modal-close-button" onclick="closeITTrackerActivitiesModal()" aria-label="Close activities modal"><i class="fas fa-times"></i></button>
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin: 0 0 4px 0;">IT Activities History</h3>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Tracks all profile, password, shift and deployment actions with who did them and who was affected.</p>
+            </div>
+            <div id="itTrackerActivitiesContent" style="max-height: 62vh; overflow-y: auto;">
+                <!-- Activities table loads here -->
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closeITTrackerActivitiesModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="addStaffModalOverlay" class="modal-overlay hidden">
         <div class="staff-profile-modal">
             <button class="modal-close-button" onclick="closeAddStaffModal()" aria-label="Close add staff modal"><i class="fas fa-times"></i></button>
@@ -1209,7 +1297,9 @@
             </div>
             <div class="form-element">
                 <label for="newStaffRole">Role / Title</label>
-                <input id="newStaffRole" type="text" placeholder="e.g. Infrastructure Analyst" />
+                <select id="newStaffRole">
+                    <option value="">Select role</option>
+                </select>
             </div>
             <div class="form-element">
                 <label for="newStaffImage">Profile Picture <span style="font-weight:400; color:#64748b;">(optional)</span></label>
@@ -1230,6 +1320,63 @@
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
                 <button type="button" class="btn-cancel" onclick="closeAddStaffModal()">Cancel</button>
                 <button type="button" class="add-btn" onclick="addNewITStaff()" style="background: #2563eb; color: white;"><i class="fas fa-plus"></i> Add Staff</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addRoleModalOverlay" class="modal-overlay hidden">
+        <div class="staff-profile-modal">
+            <button class="modal-close-button" onclick="closeAddRoleModal()" aria-label="Close add role modal"><i class="fas fa-times"></i></button>
+            <div style="margin-bottom: 20px;">
+                <h3>Add New Role</h3>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Create a custom IT staff role with permissions for enable/disable/delete and staff creation.</p>
+            </div>
+            <div class="form-element">
+                <label for="newRoleName">Role Name</label>
+                <input id="newRoleName" type="text" placeholder="e.g. IT Support Coordinator" />
+            </div>
+            <div class="form-element">
+                <label for="newRoleRank">Position on Role Map</label>
+                <select id="newRoleRank">
+                    <option value="">Select a role position</option>
+                </select>
+                <small>Lower numbers mean higher hierarchy (1 is IT Manager). Choose an empty position number, then set permissions.</small>
+            </div>
+            <div class="form-element">
+                <label>Role Permissions</label>
+                <div style="display:grid; gap:10px;">
+                    <label><input id="roleAccessView" type="checkbox" checked /> Can view user directory</label>
+                    <label><input id="roleAccessEditPcs" type="checkbox" /> Can edit PC inventory</label>
+                    <label><input id="roleAccessEditProfiles" type="checkbox" /> Can edit lower-ranked staff profiles</label>
+                    <label><input id="roleAccessDisable" type="checkbox" /> Can disable active staff</label>
+                    <label><input id="roleAccessEnable" type="checkbox" /> Can enable disabled staff</label>
+                    <label><input id="roleAccessDelete" type="checkbox" /> Can delete staff</label>
+                    <label><input id="roleAccessAddStaff" type="checkbox" /> Can add new staff</label>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closeAddRoleModal()">Cancel</button>
+                <button type="button" class="add-btn" onclick="saveNewRole()" style="background: #2563eb; color: white;"><i class="fas fa-plus"></i> Save Role</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteRoleModalOverlay" class="modal-overlay hidden">
+        <div class="staff-profile-modal">
+            <button class="modal-close-button" onclick="closeDeleteRoleModal()" aria-label="Close delete role modal"><i class="fas fa-times"></i></button>
+            <div style="margin-bottom: 20px;">
+                <h3>Delete Role</h3>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Remove a custom staff role from the role map. Only IT Manager may delete roles.</p>
+            </div>
+            <div class="form-element">
+                <label for="deleteRoleSelect">Select Role</label>
+                <select id="deleteRoleSelect">
+                    <option value="">Select a role to delete</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closeDeleteRoleModal()">Cancel</button>
+                <button type="button" class="delete-btn" onclick="deleteSelectedRole()" style="background: #dc2626; color: white;"><i class="fas fa-trash-alt"></i> Delete Role</button>
             </div>
         </div>
     </div>

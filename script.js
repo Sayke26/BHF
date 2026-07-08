@@ -49,6 +49,14 @@ const FIREBASE_HISTORY_DOC = {
     collection: 'sharedState',
     doc: 'auditHistory'
 };
+const FIREBASE_ROLE_DOC = {
+    collection: 'sharedState',
+    doc: 'itRoleDefinitions'
+};
+const FIREBASE_SHIFT_DOC = {
+    collection: 'sharedState',
+    doc: 'itShiftHistory'
+};
 let firebaseApp = null;
 let firestoreDb = null;
 let remoteSyncApplying = false;
@@ -75,7 +83,7 @@ function isRemoteSyncActive() {
                 if (key === 'pcData') {
                     _hookGuard = true;
                     try { pcData = JSON.parse(value); } catch (e) {}
-                    if (isRemoteSyncActive()) {
+                    if (isRemoteSyncActive() && !remoteSyncApplying) {
                         try { pushPcDataToCloud(); } catch (e) { console.warn('pushPcDataToCloud failed from hook', e); }
                     }
                     _hookGuard = false;
@@ -84,7 +92,7 @@ function isRemoteSyncActive() {
                 if (key === 'modificationHistory') {
                     _hookGuard = true;
                     try { modificationHistory = JSON.parse(value || '[]'); } catch (e) {}
-                    if (isRemoteSyncActive()) {
+                    if (isRemoteSyncActive() && !remoteSyncApplying) {
                         try { pushHistoryToCloud(); } catch (e) { console.warn('pushHistoryToCloud failed from hook', e); }
                     }
                     _hookGuard = false;
@@ -104,6 +112,24 @@ function isRemoteSyncActive() {
                     try { /* no-op */ } catch (e) {}
                     if (isRemoteSyncActive() && !remoteAnnouncementsApplying) {
                         try { syncAnnouncementsToRemote(JSON.parse(value || '[]')); } catch (e) { console.warn('syncAnnouncementsToRemote failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'itStaffRoleDefinitions') {
+                    _hookGuard = true;
+                    try { /* no-op */ } catch (e) {}
+                    if (isRemoteSyncActive() && !remoteSyncApplying) {
+                        try { syncRoleDefinitionsToRemote(JSON.parse(value || '{}')); } catch (e) { console.warn('syncRoleDefinitionsToRemote failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'itShiftHistory') {
+                    _hookGuard = true;
+                    try { /* no-op */ } catch (e) {}
+                    if (isRemoteSyncActive() && !remoteSyncApplying) {
+                        try { syncShiftHistoryToRemote(JSON.parse(value || '[]')); } catch (e) { console.warn('syncShiftHistoryToRemote failed from hook', e); }
                     }
                     _hookGuard = false;
                     return;
@@ -272,6 +298,52 @@ async function initializeRemoteSync() {
                     } catch (e) { console.warn('modificationHistory migration failed', e); }
                 }
             } catch (e) { console.warn('history initial sync check failed', e); }
+
+            try {
+                const roleRefInit = firestoreDb.collection(FIREBASE_ROLE_DOC.collection).doc(FIREBASE_ROLE_DOC.doc);
+                const roleSnap = await roleRefInit.get();
+                if (roleSnap.exists) {
+                    const data = roleSnap.data();
+                    if (data && typeof data.roles === 'object') {
+                        const remoteRoles = ensureDefaultRoleDefinitions(data.roles);
+                        try { localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(remoteRoles)); } catch (e) {}
+                        populateAddStaffRoleOptions();
+                    }
+                } else {
+                    try {
+                        const localRawRoles = localStorage.getItem('itStaffRoleDefinitions');
+                        if (localRawRoles) {
+                            const localRoles = JSON.parse(localRawRoles || '{}');
+                            if (localRoles && Object.keys(localRoles).length > 0) {
+                                await roleRefInit.set({ roles: localRoles }, { merge: true });
+                                console.info('Migrated local role definitions → Firestore sharedState/itRoleDefinitions');
+                            }
+                        }
+                    } catch (e) { console.warn('role definitions migration failed', e); }
+                }
+            } catch (e) { console.warn('role definitions initial sync check failed', e); }
+
+            try {
+                const shiftRefInit = firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc);
+                const shiftSnap = await shiftRefInit.get();
+                if (shiftSnap.exists) {
+                    const data = shiftSnap.data();
+                    if (data && Array.isArray(data.shiftHistory)) {
+                        itShiftHistory = data.shiftHistory;
+                        try { localStorage.setItem('itShiftHistory', JSON.stringify(itShiftHistory)); } catch (e) {}
+                        try { if (typeof loadAdminBranchData === 'function') loadAdminBranchData(); } catch (e) {}
+                    }
+                } else {
+                    try {
+                        const localHist = JSON.parse(localStorage.getItem('itShiftHistory') || '[]');
+                        if (Array.isArray(localHist) && localHist.length > 0) {
+                            await shiftRefInit.set({ shiftHistory: localHist }, { merge: true });
+                            console.info('Migrated local shift history → Firestore sharedState/itShiftHistory');
+                        }
+                    } catch (e) { console.warn('shift history migration failed', e); }
+                }
+            } catch (e) { console.warn('shift history initial sync check failed', e); }
+
         // Listen for announcements doc changes as well
         try {
             const annRef = firestoreDb.collection(FIREBASE_ANNOUNCEMENTS_DOC.collection).doc(FIREBASE_ANNOUNCEMENTS_DOC.doc);
@@ -319,13 +391,50 @@ async function initializeRemoteSync() {
                 if (!data || !Array.isArray(data.history)) return;
                 
                 // Synchronize global ledgers locally
-                modificationHistory = data.history;
-                localStorage.setItem("modificationHistory", JSON.stringify(modificationHistory));
-                
-                // Refresh the logging rows table automatically
-                if (typeof loadAdminBranchData === 'function') loadAdminBranchData();
+                remoteSyncApplying = true;
+                try {
+                    modificationHistory = data.history;
+                    localStorage.setItem("modificationHistory", JSON.stringify(modificationHistory));
+                    if (typeof loadAdminBranchData === 'function') loadAdminBranchData();
+                } finally {
+                    remoteSyncApplying = false;
+                }
             }, (err) => console.error('History pipeline subscription error:', err));
         } catch (e) { console.warn('History dynamic registration hook blocked:', e); }
+
+        try {
+            const roleRef = firestoreDb.collection(FIREBASE_ROLE_DOC.collection).doc(FIREBASE_ROLE_DOC.doc);
+            roleRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || typeof data.roles !== 'object') return;
+                remoteSyncApplying = true;
+                try {
+                    const remoteRoles = ensureDefaultRoleDefinitions(data.roles);
+                    localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(remoteRoles));
+                    populateAddStaffRoleOptions();
+                } finally {
+                    remoteSyncApplying = false;
+                }
+            }, (err) => console.error('Role definitions pipeline subscription error:', err));
+        } catch (e) { console.warn('Role definitions listener not attached:', e); }
+
+        try {
+            const shiftRef = firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc);
+            shiftRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !Array.isArray(data.shiftHistory)) return;
+                remoteSyncApplying = true;
+                try {
+                    itShiftHistory = data.shiftHistory;
+                    localStorage.setItem('itShiftHistory', JSON.stringify(itShiftHistory));
+                    if (typeof loadAdminBranchData === 'function') loadAdminBranchData();
+                } finally {
+                    remoteSyncApplying = false;
+                }
+            }, (err) => console.error('Shift history pipeline subscription error:', err));
+        } catch (e) { console.warn('Shift history listener not attached:', e); }
         // ------------------------------------------------------------------
         // NEW: Real-Time Sync Streams for Workstation Data Matrix (pcData)
         // ------------------------------------------------------------------
@@ -478,6 +587,46 @@ async function syncProfilesToRemote(profiles) {
         console.error('Failed to sync profiles to remote:', e);
         updateRemoteSyncStatusDisplay('error', e.message || String(e));
     }
+}
+
+async function syncRoleDefinitionsToRemote(definitions) {
+    if (!firestoreDb || !definitions || typeof definitions !== 'object') {
+        console.warn('[RemoteSync] syncRoleDefinitionsToRemote skipped', { firestoreDbExists: !!firestoreDb, definitionsType: typeof definitions });
+        return;
+    }
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_ROLE_DOC.collection).doc(FIREBASE_ROLE_DOC.doc);
+        await docRef.set({ roles: definitions }, { merge: true });
+    } catch (e) {
+        console.error('Failed to sync role definitions to remote:', e);
+        updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
+
+async function syncShiftHistoryToRemote(history) {
+    if (!firestoreDb || !Array.isArray(history)) {
+        console.warn('[RemoteSync] syncShiftHistoryToRemote skipped', { firestoreDbExists: !!firestoreDb, historyType: typeof history });
+        return;
+    }
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc);
+        await docRef.set({ shiftHistory: history }, { merge: true });
+    } catch (e) {
+        console.error('Failed to sync shift history to remote:', e);
+        updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
+
+function syncLocalRoleDefinitions(remoteDefinitions) {
+    if (!remoteDefinitions || typeof remoteDefinitions !== 'object') return;
+    persistRoleDefinitions(remoteDefinitions);
+    populateAddStaffRoleOptions();
+}
+
+function syncLocalShiftHistory(remoteHistory) {
+    if (!Array.isArray(remoteHistory)) return;
+    itShiftHistory = remoteHistory;
+    persistItShiftHistory();
 }
 
 function broadcastProfilesUpdate(profiles) {
@@ -791,6 +940,7 @@ try { pcData = JSON.parse(localStorage.getItem('pcData') || 'null'); } catch (e)
 if (!pcData) pcData = {};
 let modificationHistory = JSON.parse(localStorage.getItem("modificationHistory")) || [];
 let broadcastRemarks = JSON.parse(localStorage.getItem("broadcastRemarks")) || [];
+let announcementBranchSelection = [];
 
 // Ensure all modification history entries have proper user tracking
 function ensureModificationHistoryHasUserTracking() {
@@ -809,11 +959,12 @@ function persistModificationHistory() {
     try { window.dispatchEvent(new Event('modHistoryUpdated')); } catch(e) {}
 }
 // Listen for internal notifications and cross-tab storage events to refresh admin history
-window.addEventListener('modHistoryUpdated', () => { try { loadAdminBranchData(); } catch(e) {} });
+window.addEventListener('modHistoryUpdated', () => { try { loadAdminBranchData(); } catch(e) {} try { refreshITTrackerActivitiesModal(); } catch(e) {} });
 window.addEventListener('storage', (e) => {
     if (e.key === 'modificationHistory') {
         modificationHistory = JSON.parse(e.newValue || '[]');
         try { loadAdminBranchData(); } catch (err) { console.error(err); }
+        try { refreshITTrackerActivitiesModal(); } catch (err) { console.error(err); }
     }
     if (e.key === 'staffFeedbacks') {
         try { renderStaffFeedbackHistoryPage(); } catch (err) { /* ignore if page not ready */ }
@@ -858,12 +1009,13 @@ let pendingStaffRemoval = null;
 const DEFAULT_IT_STAFF_PROFILES = {
     ali: {
         id: 'ali',
+        idNumber: '001',
         name: 'Ali',
-        role: 'Lead Systems Engineer',
+        role: 'IT Manager',
         username: 'BHF-Ali',
         password: '123456',
         image: 'images/IT1.jpg',
-        phone: '+63 917 000 0001',
+        phone: '+63 917 000 00s01',
         email: '',
         link: '',
         location: '',
@@ -871,8 +1023,9 @@ const DEFAULT_IT_STAFF_PROFILES = {
     },
     marc_benson: {
         id: 'marc_benson',
+        idNumber: '002',
         name: 'Marc Benson',
-        role: 'Network Operations Manager',
+        role: 'IT Support Specialist',
         username: 'BHF-Benson',
         password: '123456',
         image: 'images/IT2.jpg',
@@ -884,8 +1037,9 @@ const DEFAULT_IT_STAFF_PROFILES = {
     },
     franz_renze: {
         id: 'franz_renze',
+        idNumber: '003',
         name: 'Franz Renze',
-        role: 'Support & Field Engineer',
+        role: 'IT Support Specialist',
         username: 'BHF-Franz',
         password: '123456',
         image: 'images/IT3.jpg',
@@ -897,13 +1051,236 @@ const DEFAULT_IT_STAFF_PROFILES = {
     }
 };
 
-// Current authenticated admin username (profile id key)
-let adminUserKey = sessionStorage.getItem('adminUserKey') || null;
-let itShiftHistory = JSON.parse(localStorage.getItem('itShiftHistory') || '[]');
+const DEFAULT_IT_ROLE_DEFINITIONS = {
+    'it manager': {
+        name: 'IT Manager',
+        rank: 1,
+        access: {
+            view: true,
+            editPcs: true,
+            editProfiles: true,
+            disable: true,
+            enable: true,
+            delete: true,
+            addStaff: true
+        }
+    },
+    'it support specialist': {
+        name: 'IT Support Specialist',
+        rank: 3,
+        access: {
+            view: true,
+            editPcs: false,
+            editProfiles: false,
+            disable: true,
+            enable: true,
+            delete: false,
+            addStaff: false
+        }
+    }
+};
+
+function getStoredRoleDefinitions() {
+    const raw = localStorage.getItem('itStaffRoleDefinitions');
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw);
+            return ensureDefaultRoleDefinitions(parsed);
+        } catch (e) {
+            console.warn('Failed to parse stored role definitions:', e);
+        }
+    }
+    const copy = JSON.parse(JSON.stringify(DEFAULT_IT_ROLE_DEFINITIONS));
+    localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(copy));
+    return copy;
+}
+
+function ensureDefaultRoleDefinitions(storedDefinitions) {
+    const repaired = { ...storedDefinitions };
+    let changed = false;
+    Object.entries(DEFAULT_IT_ROLE_DEFINITIONS).forEach(([norm, def]) => {
+        if (!repaired[norm]) {
+            repaired[norm] = JSON.parse(JSON.stringify(def));
+            changed = true;
+            return;
+        }
+
+        const existing = repaired[norm];
+        if (existing.name !== def.name) {
+            repaired[norm].name = def.name;
+            changed = true;
+        }
+
+        if (!existing.rank || existing.rank !== def.rank) {
+            repaired[norm].rank = def.rank;
+            changed = true;
+        }
+
+        if (!existing.access || typeof existing.access !== 'object') {
+            repaired[norm].access = JSON.parse(JSON.stringify(def.access));
+            changed = true;
+        } else {
+            Object.entries(def.access).forEach(([perm, value]) => {
+                if (existing.access[perm] === undefined) {
+                    existing.access[perm] = value;
+                    changed = true;
+                }
+            });
+        }
+    });
+    if (changed) {
+        localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(repaired));
+    }
+    return repaired;
+}
+
+function persistRoleDefinitions(definitions) {
+    localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(definitions));
+    if (isRemoteSyncActive() && !remoteSyncApplying) {
+        syncRoleDefinitionsToRemote(definitions).catch((e) => console.warn('Remote role sync error', e));
+    }
+}
 
 function persistItShiftHistory() {
     localStorage.setItem('itShiftHistory', JSON.stringify(itShiftHistory || []));
+    if (isRemoteSyncActive() && !remoteSyncApplying) {
+        syncShiftHistoryToRemote(itShiftHistory || []).catch((e) => console.warn('Remote shift history sync error', e));
+    }
 }
+
+function getAvailableStaffRoleNames(includeManager = false) {
+    const definitions = getStoredRoleDefinitions();
+    return Object.values(definitions)
+        .filter(def => includeManager || normalizeRole(def.name) !== 'it manager')
+        .sort((a, b) => (a.rank || 999) - (b.rank || 999))
+        .map(def => def.name);
+}
+
+function getRoleRank(roleName) {
+    const definitions = getStoredRoleDefinitions();
+    return definitions[normalizeRole(roleName)]?.rank || 999;
+}
+
+function isActorHigherRankThanTarget(actorRole, targetRole) {
+    const actorRank = getRoleRank(actorRole);
+    const targetRank = getRoleRank(targetRole);
+    return normalizeRole(actorRole) === 'it manager' || actorRank < targetRank;
+}
+
+function getRoleRankOptions() {
+    const definitions = getStoredRoleDefinitions();
+    const assigned = Object.values(definitions).map(def => def.rank || 999);
+    const maxRank = Math.max(5, ...assigned.filter(rank => rank < 999));
+    const options = [{ value: '', label: 'Select a role position' }];
+
+    for (let rank = 2; rank <= maxRank + 1; rank += 1) {
+        const existing = Object.values(definitions).find(def => def.rank === rank);
+        const label = existing
+            ? `${rank} - ${existing.name}`
+            : `${rank} - available position`;
+        options.push({ value: rank, label });
+    }
+
+    return options;
+}
+
+function populateRoleRankOptions() {
+    const rankSelect = document.getElementById('newRoleRank');
+    if (!rankSelect) return;
+    const options = getRoleRankOptions();
+    rankSelect.innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+}
+
+function populateAddStaffRoleOptions() {
+    const select = document.getElementById('newStaffRole');
+    if (!select) return;
+    const roles = getAvailableStaffRoleNames(false);
+    if (!roles.length) {
+        select.innerHTML = '<option value="">No staff roles available</option>';
+        return;
+    }
+    select.innerHTML = '<option value="">Select role</option>' + roles.map(role => `<option value="${role}">${role}</option>`).join('');
+}
+
+function openAddRoleModal() {
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    if (normalizeRole(currentRole) !== 'it manager') {
+        toastNotice('warning', 'Access denied', 'Only IT Manager may add custom roles.');
+        return;
+    }
+    populateRoleRankOptions();
+    const overlay = document.getElementById('addRoleModalOverlay');
+    if (!overlay) return;
+    document.getElementById('newRoleName').value = '';
+    const rankSelect = document.getElementById('newRoleRank');
+    if (rankSelect) rankSelect.value = '';
+    ['roleAccessView', 'roleAccessEditPcs', 'roleAccessEditProfiles', 'roleAccessDisable', 'roleAccessEnable', 'roleAccessDelete', 'roleAccessAddStaff'].forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) checkbox.checked = id === 'roleAccessView';
+    });
+    overlay.classList.remove('hidden');
+}
+
+function closeAddRoleModal() {
+    const overlay = document.getElementById('addRoleModalOverlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function saveNewRole() {
+    const nameInput = document.getElementById('newRoleName');
+    const roleName = nameInput?.value.trim();
+    const rankSelect = document.getElementById('newRoleRank');
+    const rankValue = rankSelect?.value || '';
+    const rank = parseInt(rankValue, 10);
+    if (!roleName) {
+        toastNotice('warning', 'Role Name Required', 'Please enter a name for the new role.');
+        return;
+    }
+    if (!rankValue) {
+        toastNotice('warning', 'Position Required', 'Please choose a role position in the role map first.');
+        return;
+    }
+    if (rank === 1) {
+        toastNotice('warning', 'Invalid Role Position', 'Position 1 is reserved for IT Manager and cannot be assigned.');
+        return;
+    }
+    const normalizedRoleName = normalizeRole(roleName);
+    if (normalizedRoleName === 'it manager') {
+        toastNotice('warning', 'Invalid Role', 'IT Manager may not be created as a new role.');
+        return;
+    }
+    const definitions = getStoredRoleDefinitions();
+    if (definitions[normalizedRoleName]) {
+        toastNotice('warning', 'Duplicate Role', 'A role with that name already exists.');
+        return;
+    }
+    const existingRankOwner = Object.values(definitions).find(def => def.rank === rank);
+    if (existingRankOwner) {
+        toastNotice('warning', 'Rank Taken', `Position ${rank} is already assigned to ${existingRankOwner.name}. Choose another position.`);
+        return;
+    }
+    definitions[normalizedRoleName] = {
+        name: roleName,
+        rank,
+        access: {
+            view: !!document.getElementById('roleAccessView')?.checked,
+            editPcs: !!document.getElementById('roleAccessEditPcs')?.checked,
+            editProfiles: !!document.getElementById('roleAccessEditProfiles')?.checked,
+            disable: !!document.getElementById('roleAccessDisable')?.checked,
+            enable: !!document.getElementById('roleAccessEnable')?.checked,
+            delete: !!document.getElementById('roleAccessDelete')?.checked,
+            addStaff: !!document.getElementById('roleAccessAddStaff')?.checked
+        }
+    };
+    persistRoleDefinitions(definitions);
+    closeAddRoleModal();
+    populateAddStaffRoleOptions();
+    toastNotice('success', 'Role Created', `${roleName} has been added as a new IT staff role.`);
+}
+
+// Current authenticated admin username (profile id key)
+let adminUserKey = sessionStorage.getItem('adminUserKey') || null;
+let itShiftHistory = JSON.parse(localStorage.getItem('itShiftHistory') || '[]');
 
 function addShiftHistoryEntry(action, staffKey, details) {
     try {
@@ -1036,6 +1413,400 @@ function updateAdminProfileMenu() {
         }
     }
 }
+
+function showUserListsPage() {
+    closeSideMenu();
+    hideAllPages();
+    const target = document.getElementById('userListsPage');
+    if (target) {
+        target.classList.remove('hidden');
+        target.classList.add('active');
+    }
+    updateUserDirectoryActions();
+    renderUserListsTable();
+    populateAddStaffRoleOptions();
+    try { updateHamburgerVisibility(); } catch (e) {}
+}
+
+function updateUserDirectoryActions() {
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    const addRoleButton = document.getElementById('addRoleButton');
+    const deleteRoleButton = document.getElementById('deleteRoleButton');
+    const isManager = normalizeRole(currentRole) === 'it manager';
+    if (addRoleButton) {
+        addRoleButton.style.display = isManager ? 'inline-flex' : 'none';
+    }
+    if (deleteRoleButton) {
+        deleteRoleButton.style.display = isManager ? 'inline-flex' : 'none';
+    }
+}
+
+function getRoleOptionsForDeletion() {
+    const definitions = getStoredRoleDefinitions();
+    return Object.values(definitions)
+        .filter(def => normalizeRole(def.name) !== 'it manager')
+        .sort((a, b) => (a.rank || 999) - (b.rank || 999));
+}
+
+function openDeleteRoleModal() {
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    if (normalizeRole(currentRole) !== 'it manager') {
+        toastNotice('warning', 'Access denied', 'Only IT Manager may delete roles.');
+        return;
+    }
+    const select = document.getElementById('deleteRoleSelect');
+    if (!select) return;
+    const options = getRoleOptionsForDeletion();
+    select.innerHTML = '<option value="">Select a role to delete</option>' + options.map(def => `
+        <option value="${def.name}">${def.rank} - ${def.name}</option>`).join('');
+    const overlay = document.getElementById('deleteRoleModalOverlay');
+    if (overlay) overlay.classList.remove('hidden');
+}
+
+function closeDeleteRoleModal() {
+    const overlay = document.getElementById('deleteRoleModalOverlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function deleteSelectedRole() {
+    const select = document.getElementById('deleteRoleSelect');
+    const roleName = select?.value || '';
+    if (!roleName) {
+        toastNotice('warning', 'Role Required', 'Please select a role to delete.');
+        return;
+    }
+    const definitions = getStoredRoleDefinitions();
+    const normalizedRoleName = normalizeRole(roleName);
+    if (!definitions[normalizedRoleName]) {
+        toastNotice('error', 'Not Found', 'The selected role could not be found.');
+        return;
+    }
+    delete definitions[normalizedRoleName];
+    persistRoleDefinitions(definitions);
+    closeDeleteRoleModal();
+    populateAddStaffRoleOptions();
+    toastNotice('success', 'Role Deleted', `${roleName} has been removed from the role map.`);
+}
+
+function renderUserListsTable() {
+    const tableBody = document.getElementById('userListsTableBody');
+    if (!tableBody) return;
+    const profiles = Object.values(getStoredStaffProfiles())
+        .sort((a, b) => {
+            const priority = {
+                'IT Manager': 1,
+                'IT Support Specialist': 2
+            };
+            return (priority[a.role] || 999) - (priority[b.role] || 999);
+        });
+    const currentProfile = getCurrentAdminProfile();
+    const currentRole = currentProfile?.role || '';
+    const currentKey = getCurrentAdminKey();
+
+    console.debug('renderUserListsTable: currentKey, currentRole', { currentKey, currentRole });
+
+    // Fallback: if session key/profile not available, try to infer from header name (helps when sessionStorage isn't set)
+    let effectiveKey = currentKey;
+    let effectiveRole = currentRole;
+    if (!effectiveKey || !currentProfile) {
+        try {
+            const headerName = document.getElementById('adminProfileName')?.textContent?.trim();
+            if (headerName) {
+                const found = Object.entries(getStoredStaffProfiles()).find(([k, v]) => (v.name || '').trim() === headerName.trim());
+                if (found) {
+                    effectiveKey = found[0];
+                    effectiveRole = found[1].role || effectiveRole;
+                    console.debug('renderUserListsTable: inferred current admin from header', { effectiveKey, effectiveRole });
+                }
+            }
+        } catch (e) { /* ignore fallback errors */ }
+    }
+
+    tableBody.innerHTML = profiles.map(profile => {
+        const idNumber = profile.idNumber || profile.id.replace(/[^0-9]/g, '') || '---';
+        const isDisabled = profile.disabled;
+        const statusLabel = isDisabled ? 'Disabled' : 'Active';
+        const isSelf = effectiveKey === profile.id;
+        const canDisable = canDisableProfile(effectiveRole, profile.role) && !isDisabled && !isSelf;
+        const canEnable = canEnableProfile(effectiveRole, profile.role) && isDisabled && !isSelf;
+        const canDelete = canDeleteProfile(effectiveRole, profile.role) && !isSelf;
+
+        console.debug('renderUserListsTable: profile check', { profileId: profile.id, profileRole: profile.role, isDisabled, canDisable, canEnable, canDelete, effectiveKey, effectiveRole });
+
+        const actionButtons = [];
+        const normalizedEffectiveRole = normalizeRole(effectiveRole);
+        if (!isSelf) {
+            if (normalizedEffectiveRole === 'it manager') {
+                if (!isDisabled) {
+                    actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" onclick="queueDisableStaff('${profile.id}')" ${canDisable ? '' : 'disabled'}>Disable</button>`);
+                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" onclick="deleteStaffProfile('${profile.id}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
+                } else {
+                    actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" onclick="enableStaff('${profile.id}')" ${canEnable ? '' : 'disabled'}>Enable</button>`);
+                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" onclick="deleteStaffProfile('${profile.id}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
+                }
+            } else {
+                if (!isDisabled) {
+                    if (canDisable) {
+                        actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" onclick="queueDisableStaff('${profile.id}')">Disable</button>`);
+                    }
+                } else {
+                    if (canEnable) {
+                        actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" onclick="enableStaff('${profile.id}')">Enable</button>`);
+                    }
+                }
+            }
+            if (normalizedEffectiveRole === 'it manager') {
+                actionButtons.push(`<button type="button" class="add-btn promote-btn" data-staff="${profile.id}" data-action="promote" style="padding:5px 10px; font-size:12px;">Promote</button>`);
+                actionButtons.push(`<button type="button" class="secondary-btn demote-btn" data-staff="${profile.id}" data-action="demote" style="padding:5px 10px; font-size:12px;">Demote</button>`);
+            }
+        }
+
+        if (!actionButtons.length) {
+            actionButtons.push('<span style="color:#64748b; font-size:12px;">No actions</span>');
+        }
+
+        return `
+            <tr>
+                <td>${idNumber}</td>
+                <td>${profile.name || 'Unknown'}</td>
+                <td>${profile.username || 'N/A'}</td>
+                <td>${profile.password || 'N/A'}</td>
+                <td>${profile.role || 'N/A'}</td>
+                <td>${statusLabel}</td>
+                <td style="display:flex; gap:8px; flex-wrap:wrap;">${actionButtons.join('')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Attach a single delegated handler on the table body so events work despite innerHTML re-renders
+    try {
+        if (!tableBody._roleChangeDelegated) {
+            tableBody.addEventListener('click', (e) => {
+                const promoteBtn = e.target.closest && e.target.closest('.promote-btn');
+                const demoteBtn = e.target.closest && e.target.closest('.demote-btn');
+                if (promoteBtn) {
+                    const staffId = promoteBtn.getAttribute('data-staff');
+                    console.log('[RoleChange] promote clicked', { staffId });
+                    openStaffRoleChangeModal(staffId, 'promote');
+                    return;
+                }
+                if (demoteBtn) {
+                    const staffId = demoteBtn.getAttribute('data-staff');
+                    console.log('[RoleChange] demote clicked', { staffId });
+                    openStaffRoleChangeModal(staffId, 'demote');
+                    return;
+                }
+            });
+            tableBody._roleChangeDelegated = true;
+        }
+    } catch (e) { console.warn('Failed to attach delegated promote/demote handler', e); }
+}
+
+function normalizeRole(role) {
+    return String(role || '').trim().toLowerCase();
+}
+
+function getRoleAccess(roleName) {
+    const definitions = getStoredRoleDefinitions();
+    return definitions[normalizeRole(roleName)]?.access || {};
+}
+
+function canDisableProfile(actorRole, targetRole) {
+    const actor = normalizeRole(actorRole);
+    const target = normalizeRole(targetRole);
+    if (actor === 'it manager') return true;
+    if (target === 'it manager') return false;
+    return getRoleAccess(actorRole).disable === true && isActorHigherRankThanTarget(actorRole, targetRole);
+}
+
+function canEnableProfile(actorRole, targetRole) {
+    const actor = normalizeRole(actorRole);
+    const target = normalizeRole(targetRole);
+    if (actor === 'it manager') return true;
+    if (target === 'it manager') return false;
+    return getRoleAccess(actorRole).enable === true && isActorHigherRankThanTarget(actorRole, targetRole);
+}
+
+function canDeleteProfile(actorRole, targetRole) {
+    const actor = normalizeRole(actorRole);
+    if (actor === 'it manager') return true;
+    if (normalizeRole(targetRole) === 'it manager') return false;
+    return getRoleAccess(actorRole).delete === true && isActorHigherRankThanTarget(actorRole, targetRole);
+}
+
+let pendingRoleChange = null;
+
+function openStaffRoleChangeModal(staffId, actionType) {
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    if (normalizeRole(currentRole) !== 'it manager') {
+        toastNotice('warning', 'Access denied', 'Only IT Manager may change staff roles.');
+        return;
+    }
+    const profiles = getStoredStaffProfiles();
+    const profile = profiles[staffId];
+    if (!profile) {
+        toastNotice('error', 'Not found', 'Selected staff member was not found.');
+        return;
+    }
+    pendingRoleChange = { staffId, actionType };
+    const title = actionType === 'promote' ? 'Promote Staff' : 'Demote Staff';
+    document.getElementById('staffRoleChangeTitle').textContent = title;
+    document.getElementById('staffRoleChangeLabel').textContent = `Choose the role to ${actionType} ${profile.name || 'staff member'} to.`;
+    const select = document.getElementById('staffRoleChangeSelect');
+    const roles = getAvailableStaffRoleNames(true);
+    if (select) {
+        select.innerHTML = '<option value="">Select role</option>' + roles.map(role => {
+            const selected = role === profile.role ? ' selected' : '';
+            return `<option value="${role}"${selected}>${role}</option>`;
+        }).join('');
+    }
+    const overlay = document.getElementById('staffRoleChangeModal');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+        try { overlay.style.display = 'flex'; overlay.style.zIndex = '10050'; } catch (e) {}
+    }
+}
+
+function closeStaffRoleChangeModal() {
+    document.getElementById('staffRoleChangeModal')?.classList.add('hidden');
+    pendingRoleChange = null;
+}
+
+function confirmStaffRoleChange() {
+    if (!pendingRoleChange) return;
+    const { staffId, actionType } = pendingRoleChange;
+    const select = document.getElementById('staffRoleChangeSelect');
+    const selectedRole = select?.value || '';
+    if (!selectedRole) {
+        toastNotice('warning', 'Select a role', 'Please choose a role before saving.');
+        return;
+    }
+    const profiles = getStoredStaffProfiles();
+    const profile = profiles[staffId];
+    if (!profile) {
+        toastNotice('error', 'Not found', 'Selected staff member was not found.');
+        return;
+    }
+    if (normalizeRole(profile.role) === normalizeRole(selectedRole)) {
+        toastNotice('info', 'No change', 'The selected role is already assigned to this staff member.');
+        return;
+    }
+    profile.role = selectedRole;
+    persistStaffProfiles(profiles);
+    toastNotice('success', 'Role updated', `${profile.name || 'Staff member'} is now ${selectedRole}.`);
+    closeStaffRoleChangeModal();
+    renderUserListsTable();
+}
+
+// Diagnostic helper: shows role-change related info (for troubleshooting without console)
+function runRoleChangeDiagnostics() {
+    try {
+        const adminKey = sessionStorage.getItem('adminUserKey');
+        const adminRoleText = document.getElementById('adminProfileDropdownRole')?.textContent?.trim() || '(not visible)';
+        const promoteCount = document.querySelectorAll('.promote-btn').length;
+        const demoteCount = document.querySelectorAll('.demote-btn').length;
+        const tableBody = document.getElementById('userListsTableBody');
+        const delegated = !!(tableBody && tableBody._roleChangeDelegated);
+        const msg = [
+            `adminUserKey: ${adminKey}`,
+            `adminRole (header): ${adminRoleText}`,
+            `promote buttons found: ${promoteCount}`,
+            `demote buttons found: ${demoteCount}`,
+            `table delegated handler: ${delegated}`
+        ].join('\n');
+        console.log('[RoleChangeDiag] ', { adminKey, adminRoleText, promoteCount, demoteCount, delegated });
+        alert(msg);
+        return { adminKey, adminRoleText, promoteCount, demoteCount, delegated };
+    } catch (e) {
+        console.error('runRoleChangeDiagnostics failed', e);
+        alert('Diagnostics failed - see console for details.');
+        return null;
+    }
+}
+
+function canModifyProfile(actorRole, targetRole) {
+    const actor = normalizeRole(actorRole);
+    if (actor === 'it manager') return true;
+    if (!actorRole || !targetRole) return false;
+    if (normalizeRole(targetRole) === 'it manager') return false;
+    return getRoleAccess(actorRole).editProfiles === true && isActorHigherRankThanTarget(actorRole, targetRole);
+}
+
+function queueDisableStaff(staffKey) {
+    pendingStaffRemoval = staffKey;
+    const profiles = getStoredStaffProfiles();
+    const profile = profiles[staffKey];
+    const text = document.getElementById('removeStaffModalText');
+    if (text) {
+        text.textContent = `Disable ${profile.name}? This will keep their history while removing them from active roster views.`;
+    }
+    const overlay = document.getElementById('removeStaffModalOverlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+    }
+}
+
+function enableStaff(staffKey) {
+    const profiles = getStoredStaffProfiles();
+    if (!profiles[staffKey]) return;
+    const profileName = profiles[staffKey].name || 'Staff member';
+    profiles[staffKey] = {
+        ...profiles[staffKey],
+        disabled: false
+    };
+    persistStaffProfiles(profiles);
+    recordModification('enable_profile', staffKey, { name: profileName });
+    renderUserListsTable();
+    populateITTrackerControls();
+    renderITStaffProfileGrid();
+    toastNotice('success', 'Staff Enabled', `${profileName} is now active again.`);
+}
+
+function deleteStaffProfile(staffKey) {
+    if (!staffKey) return;
+    const profiles = getStoredStaffProfiles();
+    const profile = profiles[staffKey];
+    if (!profile) return;
+    if (!confirm(`Delete ${profile.name} permanently? This cannot be undone.`)) return;
+    delete profiles[staffKey];
+    persistStaffProfiles(profiles);
+    renderUserListsTable();
+    populateITTrackerControls();
+    renderITStaffProfileGrid();
+    toastNotice('success', 'Profile Deleted', `${profile.name} was removed permanently.`);
+}
+
+function getNextStaffIdNumber() {
+    const profiles = getStoredStaffProfiles();
+    const ids = Object.values(profiles)
+        .map(p => p.idNumber)
+        .filter(Boolean)
+        .map(n => Number(n))
+        .filter(n => !Number.isNaN(n));
+    const nextId = ids.length ? Math.max(...ids) + 1 : 4;
+    return String(nextId).padStart(3, '0');
+}
+
+function ensureStaffProfileIds() {
+    const profiles = getStoredStaffProfiles();
+    let updated = false;
+    const knownProfiles = {
+        ali: '001',
+        marc_benson: '002',
+        franz_renze: '003'
+    };
+    Object.entries(knownProfiles).forEach(([key, value]) => {
+        if (profiles[key] && profiles[key].idNumber !== value) {
+            profiles[key].idNumber = value;
+            updated = true;
+        }
+    });
+    if (updated) {
+        persistStaffProfiles(profiles);
+    }
+}
+
+ensureStaffProfileIds();
 
 function toggleAdminProfileMenu(event) {
     event.stopPropagation();
@@ -1679,7 +2450,7 @@ function updateBHFMapStaffMarkers() {
             if (!t || !t.closest) return;
 
             const menu = document.getElementById('sideMenu');
-            if (menu && !menu.classList.contains('hidden') && !t.closest('#sideMenu') && !t.closest('#sideMenuToggle')) {
+            if (menu && menu.classList.contains('open') && !t.closest('#sideMenu') && !t.closest('#sideMenuToggle')) {
                 closeSideMenu();
             }
 
@@ -1711,13 +2482,21 @@ function toggleSideMenu() {
     try {
         const menu = document.getElementById('sideMenu');
         if (!menu) return;
-        const isHidden = menu.classList.contains('hidden');
-        if (isHidden) {
+        const toggle = document.getElementById('sideMenuToggle');
+        const isOpen = menu.classList.contains('open');
+        const body = document.body;
+        if (!isOpen) {
+            menu.classList.add('open');
             menu.classList.remove('hidden');
             menu.setAttribute('aria-hidden', 'false');
+            body.classList.add('side-open');
+            if (toggle) toggle.classList.add('active');
         } else {
+            menu.classList.remove('open');
             menu.classList.add('hidden');
             menu.setAttribute('aria-hidden', 'true');
+            body.classList.remove('side-open');
+            if (toggle) toggle.classList.remove('active');
         }
     } catch (e) { console.error(e); }
 }
@@ -1726,9 +2505,12 @@ function closeSideMenu() {
     try {
         const menu = document.getElementById('sideMenu');
         if (menu) {
+            menu.classList.remove('open');
             menu.classList.add('hidden');
             menu.setAttribute('aria-hidden', 'true');
         }
+        try { document.body.classList.remove('side-open'); } catch (e) {}
+        try { document.getElementById('sideMenuToggle').classList.remove('active'); } catch (e) {}
     } catch (e) {}
 }
 
@@ -1787,9 +2569,20 @@ function restoreNavVisibility() {
 function updateHamburgerVisibility() {
     try {
         const menuToggle = document.getElementById('sideMenuToggle');
-        const home = document.getElementById('homePage');
-        const isHomeActive = home && home.classList.contains('active');
-        if (menuToggle) menuToggle.style.display = isHomeActive ? 'none' : '';
+        if (!menuToggle) return;
+        const active = document.querySelector('.page.active');
+        const isHome = active && active.id === 'homePage';
+        const isSideOpen = document.body.classList.contains('side-open');
+        // Hide only on Home page; always show otherwise (including when side is open)
+        if (isHome && !isSideOpen) {
+            menuToggle.style.display = 'none';
+        } else {
+            menuToggle.style.display = '';
+            menuToggle.style.zIndex = '4000';
+            menuToggle.style.pointerEvents = '';
+            menuToggle.style.opacity = '';
+            menuToggle.style.transform = '';
+        }
     } catch (e) { console.error(e); }
 }
 
@@ -1874,7 +2667,7 @@ function openAdminPage() {
     loadRemarksManagementDirectory();
     closeSideMenu();
     updateNavVisibility();
-    // Hamburger visibility will be updated by restoreNavVisibility()/updateHamburgerVisibility().
+    try { updateHamburgerVisibility(); } catch (e) {}
 }
 
 function showAdminPanel() {
@@ -1978,9 +2771,85 @@ function showITTrackerPage() {
 
 function updateITTrackerHistoryAccess() {
     const logBtn = document.getElementById('itTrackerLogHistoryBtn');
-    if (!logBtn) return;
-    const isAli = getCurrentAdminKey() === 'ali';
-    logBtn.classList.toggle('hidden', !isAli);
+    const activitiesBtn = document.getElementById('itTrackerActivitiesBtn');
+    if (logBtn) {
+        const isAli = getCurrentAdminKey() === 'ali';
+        logBtn.classList.toggle('hidden', !isAli);
+    }
+    if (activitiesBtn) {
+        activitiesBtn.classList.toggle('hidden', normalizeRole(getCurrentAdminProfile()?.role || '') !== 'it manager');
+    }
+}
+
+function openITTrackerActivitiesModal() {
+    const currentAdminRole = getCurrentAdminProfile()?.role || '';
+    if (normalizeRole(currentAdminRole) !== 'it manager') {
+        toastNotice('error', 'Access Denied', 'Only IT Manager may view full activities records.');
+        return;
+    }
+    const overlay = document.getElementById('itTrackerActivitiesModal');
+    const content = document.getElementById('itTrackerActivitiesContent');
+    if (!overlay || !content) return;
+    content.innerHTML = renderITTrackerActivitiesTable();
+    overlay.classList.remove('hidden');
+}
+
+function closeITTrackerActivitiesModal() {
+    const overlay = document.getElementById('itTrackerActivitiesModal');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function refreshITTrackerActivitiesModal() {
+    const overlay = document.getElementById('itTrackerActivitiesModal');
+    const content = document.getElementById('itTrackerActivitiesContent');
+    if (overlay && content && !overlay.classList.contains('hidden')) {
+        content.innerHTML = renderITTrackerActivitiesTable();
+    }
+}
+
+function renderITTrackerActivitiesTable() {
+    if (!Array.isArray(modificationHistory) || modificationHistory.length === 0) {
+        return `<div style="padding:24px; color:#475569; font-style:italic;">No activity history has been recorded yet.</div>`;
+    }
+    const rows = modificationHistory.map(entry => {
+        const time = new Date(entry.timestamp).toLocaleString();
+        const targetLabel = entry.target || 'N/A';
+        const details = entry.details ? JSON.stringify(entry.details) : '';
+        return `<tr>
+            <td style="padding:10px; border-bottom:1px solid #e2e8f0;">${escapeHtml(time)}</td>
+            <td style="padding:10px; border-bottom:1px solid #e2e8f0;">${escapeHtml(entry.user || '')}</td>
+            <td style="padding:10px; border-bottom:1px solid #e2e8f0;">${escapeHtml(entry.action)}</td>
+            <td style="padding:10px; border-bottom:1px solid #e2e8f0;">${escapeHtml(targetLabel)}</td>
+            <td style="padding:10px; border-bottom:1px solid #e2e8f0;">${escapeHtml(details)}</td>
+        </tr>`;
+    }).join('');
+    return `
+        <div class="activity-history-table-wrapper">
+            <div class="activity-history-summary">Showing ${rows.length} activity record${rows.length === 1 ? '' : 's'}. Most recent changes appear first.</div>
+            <div class="table-scroll-container">
+                <table class="activity-history-table">
+                    <thead>
+                        <tr>
+                            <th>Date / Time</th>
+                            <th>Performed By</th>
+                            <th>Action</th>
+                            <th>Target</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>`;
+}
+
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 function showStaffFeedbackHistoryPage() {
@@ -2211,9 +3080,15 @@ function updateITTrackerFields() {
     }
     // Restrict profile editing to the signed-in admin's own profile
     const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
-    const canEditProfile = currentUser && currentUser === selectedStaff;
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    const selectedProfile = profiles[selectedStaff] || {};
+    const isSelf = currentUser && currentUser === selectedStaff;
+    const canEditPeer = selectedProfile && currentUser && currentUser !== selectedStaff && canModifyProfile(currentRole, selectedProfile.role);
+    const canEditProfile = isSelf || canEditPeer;
+    const canEditRole = normalizeRole(currentRole) === 'it manager';
+
     if (nameInput) nameInput.disabled = !canEditProfile;
-    if (roleInput) roleInput.disabled = !canEditProfile;
+    if (roleInput) roleInput.disabled = !canEditRole;
     if (ageInput) ageInput.disabled = !canEditProfile;
     if (phoneInput) phoneInput.disabled = !canEditProfile;
     if (emailInput) emailInput.disabled = !canEditProfile;
@@ -2223,7 +3098,7 @@ function updateITTrackerFields() {
     const updateBtn = document.querySelector('.it-tracker-section--profile .add-btn');
     if (updateBtn) {
         updateBtn.disabled = !canEditProfile;
-        updateBtn.title = canEditProfile ? 'Update your profile' : 'You can only edit your own profile';
+        updateBtn.title = canEditProfile ? 'Save profile changes' : 'You can only update your own profile or a lower-ranked team member';
     }
     
     // Display feedback for the selected staff member
@@ -2404,17 +3279,24 @@ async function saveITProfileDetails() {
     }
 
     const currentUser = adminUserKey || sessionStorage.getItem('adminUserKey');
-    if (!currentUser || currentUser !== selectedStaff) {
-        toastNotice('error', 'Restricted to Own Profile', 'You can only edit your own profile, not others.');
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    const profiles = getStoredStaffProfiles();
+    const selectedProfile = profiles[selectedStaff] || {};
+    const isSelf = currentUser && currentUser === selectedStaff;
+    const canEditPeer = selectedProfile && currentUser && currentUser !== selectedStaff && canModifyProfile(currentRole, selectedProfile.role);
+    if (!isSelf && !canEditPeer) {
+        toastNotice('error', 'Restricted Access', 'You can only edit your own profile or a lower-ranked staff member profile if permitted.');
         return;
     }
 
-    if (!nameInput.value.trim() || !roleInput.value.trim()) {
+    const desiredRole = roleInput.value.trim();
+    const updatedRole = normalizeRole(currentRole) === 'it manager' ? desiredRole : selectedProfile.role;
+
+    if (!nameInput.value.trim() || !updatedRole) {
         toastNotice('warning', 'Input Required', 'Name and role are required for profile updates.');
         return;
     }
 
-    const profiles = getStoredStaffProfiles();
     const profile = profiles[selectedStaff];
     if (!profile) {
         toastNotice('error', 'Profile Not Found', 'The selected staff profile cannot be found.');
@@ -2434,7 +3316,7 @@ async function saveITProfileDetails() {
     profiles[selectedStaff] = {
         ...profile,
         name: nameInput.value.trim(),
-        role: roleInput.value.trim(),
+        role: updatedRole,
         age: ageInput.value ? parseInt(ageInput.value, 10) : profile.age || '',
         phone: phoneInput.value.trim(),
         email: emailInput.value.trim(),
@@ -2449,7 +3331,18 @@ async function saveITProfileDetails() {
     updateITTrackerFields();
     if (photoInput) photoInput.value = '';
     if (passwordInput) passwordInput.value = '';
-    recordModification('update_profile', selectedStaff, { name: nameInput.value.trim(), role: roleInput.value.trim(), age: ageInput.value, phone: phoneInput.value.trim(), email: emailInput.value.trim(), link: linkInput.value.trim() });
+    const modificationDetails = {
+        name: nameInput.value.trim(),
+        role: updatedRole,
+        age: ageInput.value,
+        phone: phoneInput.value.trim(),
+        email: emailInput.value.trim(),
+        link: linkInput.value.trim()
+    };
+    if (passwordInput && passwordInput.value) {
+        modificationDetails.passwordChanged = true;
+    }
+    recordModification('update_profile', selectedStaff, modificationDetails);
     toastNotice('success', 'Profile Updated', 'Profile details have been saved successfully.');
 }
 
@@ -2535,6 +3428,11 @@ async function addNewITStaff() {
         return;
     }
 
+    if (normalizeRole(role) === 'it manager') {
+        toastNotice('warning', 'Invalid Role', 'A new staff profile cannot be assigned the IT Manager role.');
+        return;
+    }
+
     const profiles = getStoredStaffProfiles();
     const staffKey = buildStaffKey(name);
     if (profiles[staffKey]) {
@@ -2561,6 +3459,7 @@ async function addNewITStaff() {
 
     profiles[staffKey] = {
         id: staffKey,
+        idNumber: getNextStaffIdNumber(),
         name,
         role,
         username,
@@ -2630,12 +3529,13 @@ function confirmRemoveCurrentITStaff() {
     const profiles = getStoredStaffProfiles();
     const profileName = profiles[pendingStaffRemoval]?.name || 'Staff member';
     // Mark the profile as disabled instead of deleting so histories remain intact
-    recordModification('disable_profile', pendingStaffRemoval, { name: profileName });
     profiles[pendingStaffRemoval] = {
         ...profiles[pendingStaffRemoval],
         disabled: true
     };
     persistStaffProfiles(profiles);
+    recordModification('disable_profile', pendingStaffRemoval, { name: profileName });
+    renderUserListsTable();
     renderITStaffProfileGrid();
     populateITTrackerControls();
     resetITTrackerForm();
@@ -2890,7 +3790,18 @@ function closeStaffFeedbackForm() {
     currentStaffForFeedback = '';
 }
 
+function canCreateStaff(actorRole) {
+    if (normalizeRole(actorRole) === 'it manager') return true;
+    return getRoleAccess(actorRole).addStaff === true;
+}
+
 function openAddStaffModal() {
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    if (!canCreateStaff(currentRole)) {
+        toastNotice('warning', 'Access denied', 'You do not have permission to add new staff.');
+        return;
+    }
+    populateAddStaffRoleOptions();
     const overlay = document.getElementById('addStaffModalOverlay');
     if (overlay) {
         overlay.classList.remove('hidden');
@@ -3082,27 +3993,47 @@ function closeAdvancedHealthDashboard() {
     if (panel) panel.classList.add('hidden');
 }
 
-function closeAdvancedHealthDashboard() {
-    const overlay = document.getElementById('advancedHealthModalOverlay');
-    if (overlay) {
-        // If we moved original nodes into the modal, restore them back to the original panel
-        if (window._advancedHealthMoved && window._advancedHealthMoved.nodes && window._advancedHealthMoved.panelId) {
-            const moved = window._advancedHealthMoved;
-            const originalPanel = document.getElementById(moved.panelId);
-            if (originalPanel) {
-                moved.nodes.forEach(n => originalPanel.appendChild(n));
-            }
-            delete window._advancedHealthMoved;
-        }
-
-        overlay.remove();
-        document.body.classList.remove('no-scroll');
-        return;
-    }
-
-    // Fallback: hide inline panel if present
+function showAdvancedHealthDashboard() {
     const panel = document.getElementById('advancedHealthDashboard');
-    if (panel) panel.classList.add('hidden');
+    if (!panel) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'advancedHealthModalOverlay';
+    overlay.className = 'modal-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(15, 23, 42, 0.6)';
+    overlay.style.zIndex = '9998';
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) closeAdvancedHealthDashboard();
+    });
+
+    const modal = document.createElement('div');
+    modal.className = 'modal-panel';
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.maxWidth = '1000px';
+    modal.style.width = 'calc(100% - 40px)';
+    modal.style.maxHeight = '90vh';
+    modal.style.overflow = 'auto';
+    modal.style.background = '#ffffff';
+    modal.style.borderRadius = '24px';
+    modal.style.boxShadow = '0 30px 60px rgba(15, 23, 42, 0.25)';
+    modal.style.padding = '24px';
+    modal.style.zIndex = '9999';
+
+    const panelClone = panel.cloneNode(true);
+    panelClone.classList.remove('hidden');
+    panelClone.style.margin = '0';
+    panelClone.style.boxShadow = 'none';
+    panelClone.style.background = 'transparent';
+
+    modal.appendChild(panelClone);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.classList.add('no-scroll');
 }
 
 function showInventoryReportPage() {
@@ -3313,6 +4244,7 @@ function initializeDropdownOptions() {
     const adminSelect = document.getElementById("adminBranchSelect");
     const remarkSelect = document.getElementById("remarkBranch");
     const formBranchInput = document.getElementById("branchInput");
+    const announcementBranchModalList = document.getElementById("announcementBranchModalList");
 
     const generateOptions = (el, includeDefault = false) => {
         if (!el) return;
@@ -3320,13 +4252,25 @@ function initializeDropdownOptions() {
         if (includeDefault) {
             el.innerHTML = `<option value="">All Branches</option>`;
         }
-        branches.forEach(b => el.innerHTML += `<option value="${b}">${b}</option>`);
+        branches.forEach(b => el.innerHTML += `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`);
+    };
+
+    const generateChecklist = (container) => {
+        if (!container) return;
+        container.innerHTML = branches.map(branch => `
+            <label class="announcement-branch-checkbox">
+                <input type="checkbox" name="announcementBranch" value="${escapeHtml(branch)}" />
+                <span>${escapeHtml(branch)}</span>
+            </label>
+        `).join('');
     };
 
     generateOptions(adminSelect);
     generateOptions(remarkSelect);
     generateOptions(formBranchInput);
+    generateChecklist(announcementBranchModalList);
     generateOptions(document.getElementById("inventoryBranchFilter"), true);
+    updateAnnouncementBranchSummary();
 
     if (adminSelect) {
         adminSelect.addEventListener("change", loadAdminBranchData);
@@ -3361,11 +4305,10 @@ function initializeAnalysisControls() {
         yearSelect.addEventListener('change', renderAnalysisView);
     }
 
-    const updateAdvancedHealthButtonLabel = (branchValue = '') => {
+    const updateAdvancedHealthButtonLabel = () => {
         const button = document.getElementById('analysisOpenAdvancedBtn');
         if (!button) return;
-        const scopeLabel = branchValue ? branchValue : 'All Branches';
-        button.innerText = `Show Advanced Health & Maintenance Dashboard (${scopeLabel})`;
+        button.innerText = '<Advanced>';
     };
 
     if (monthSelect) {
@@ -4532,7 +5475,29 @@ function renderAnalysisProblemCategoryChart(selectedBranchData) {
     }, {});
     const labels = Object.keys(categoryTotals);
     const data = Object.values(categoryTotals);
-    updateChart('analysisProblemCategoryChart', 'doughnut', { labels, datasets: [{ data, backgroundColor: ['#f97316', '#2563eb', '#22c55e', '#8b5cf6', '#f59e0b'] }] }, { responsive: true, plugins: { legend: { position: 'bottom' } } });
+    updateChart('analysisProblemCategoryChart', 'doughnut', {
+        labels,
+        datasets: [{
+            data,
+            backgroundColor: ['#f97316', '#2563eb', '#22c55e', '#8b5cf6', '#f59e0b'],
+            borderColor: '#ffffff',
+            borderWidth: 2
+        }]
+    }, {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 14,
+                    boxWidth: 12,
+                    font: { size: 12 }
+                }
+            }
+        },
+        layout: { padding: 12 }
+    });
 }
 
 
@@ -4555,6 +5520,61 @@ function openAnalysisComparisonPrompt() {
     if (compareMode) {
         compareMode.focus();
     }
+}
+
+const analysisDoughnutLabelPlugin = {
+    id: 'analysisDoughnutLabelPlugin',
+    afterDatasetsDraw(chart) {
+        if (chart.config.type !== 'doughnut') return;
+
+        const { ctx, data, chartArea } = chart;
+        if (!chartArea) return;
+
+        const dataset = data.datasets[0];
+        if (!dataset?.data?.length) return;
+
+        const total = dataset.data.reduce((sum, value) => sum + Number(value || 0), 0);
+        if (total <= 0) return;
+
+        const { left, top, right, bottom } = chartArea;
+        const centerX = (left + right) / 2;
+        const centerY = (top + bottom) / 2;
+        const radius = Math.min((right - left) / 2, (bottom - top) / 2) * 0.72;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const canvasId = chart.canvas && chart.canvas.id ? String(chart.canvas.id) : '';
+        const hidePercentageFor = (id) => id.startsWith('mini-') || id.includes('inventory');
+
+        chart.getDatasetMeta(0).data.forEach((arc, index) => {
+            const value = Number(dataset.data[index] || 0);
+            if (value <= 0) return;
+
+            const angle = arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
+            const x = centerX + Math.cos(angle) * radius * 0.76;
+            const y = centerY + Math.sin(angle) * radius * 0.76;
+            const percentage = ((value / total) * 100).toFixed(0);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = '600 12px Inter, system-ui, sans-serif';
+            ctx.fillText(`${value}`, x, y - 6);
+            // Only draw the percentage label on non-inventory/mini charts
+            if (!hidePercentageFor(canvasId)) {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '500 10px Inter, system-ui, sans-serif';
+                ctx.fillText(`${percentage}%`, x, y + 10);
+            }
+        });
+
+        ctx.restore();
+    }
+};
+
+if (!window.__analysisDoughnutLabelPluginRegistered) {
+    Chart.register(analysisDoughnutLabelPlugin);
+    window.__analysisDoughnutLabelPluginRegistered = true;
 }
 
 function updateChart(canvasId, type, data, options = {}) {
@@ -7017,13 +8037,33 @@ function saveAdminAnnouncement() {
         return;
     }
 
+    const branchesSelected = announcementBranchSelection.slice();
+    const scheduledDate = (document.getElementById('announcementDate')?.value || '').trim();
+    const scheduledTime = (document.getElementById('announcementTime')?.value || '').trim();
+    const scheduledAt = scheduledDate ? `${scheduledDate}${scheduledTime ? ' ' + scheduledTime : ''}` : '';
+
     const list = getStoredAnnouncements();
-    const entry = { id: `ann_${Date.now()}`, message, createdBy: adminKey, createdAt: new Date().toISOString() };
+    const entry = {
+        id: `ann_${Date.now()}`,
+        message,
+        branches: branchesSelected,
+        scheduledAt: scheduledAt || '',
+        createdBy: adminKey,
+        createdAt: new Date().toISOString()
+    };
     list.push(entry);
     persistAnnouncements(list);
     try { if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'announcements-updated', announcements: list }); } catch (e) {}
     try { syncAnnouncementsToRemote(list); } catch (e) {}
     textEl.value = '';
+    announcementBranchSelection = [];
+    updateAnnouncementBranchSummary();
+    const allBranchCheckboxes = document.querySelectorAll('#announcementBranchModalList input[type="checkbox"]');
+    allBranchCheckboxes.forEach(input => input.checked = false);
+    const dateInput = document.getElementById('announcementDate');
+    if (dateInput) dateInput.value = '';
+    const timeInput = document.getElementById('announcementTime');
+    if (timeInput) timeInput.value = '';
     renderItTrackerAnnouncements();
     displayAnnouncementsOnHome();
     toastNotice('success', 'Saved', 'Announcement saved.');
@@ -7055,11 +8095,15 @@ function renderItTrackerAnnouncements() {
     }
     container.innerHTML = list.slice().reverse().map(a => {
         const time = new Date(a.createdAt).toLocaleString();
+        const branchValues = Array.isArray(a.branches) ? a.branches.filter(Boolean) : a.branch ? [a.branch] : [];
+        const branchLine = branchValues.length ? `<div class="announcement-detail"><i class="fas fa-map-marker-alt"></i><strong>Branch:</strong> ${escapeHtml(branchValues.join(', '))}</div>` : '';
+        const scheduleLine = a.scheduledAt ? `<div class="announcement-detail"><i class="fas fa-calendar-alt"></i><strong>Date & Time:</strong> ${escapeHtml(a.scheduledAt)}</div>` : '';
         return `
             <div class="announcement-card">
-                <div style="font-weight:700; color:#0f172a;">${a.message}</div>
+                <div class="announcement-message">${escapeHtml(a.message)}</div>
+                <div class="announcement-details">${branchLine}${scheduleLine}</div>
                 <div class="meta" style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
-                    <div style="font-size:12px; color:#64748b;">${time}${a.createdBy ? ' • ' + a.createdBy : ''}</div>
+                    <div style="font-size:12px; color:#64748b;">${time}${a.createdBy ? ' • ' + escapeHtml(a.createdBy) : ''}</div>
                     <div style="text-align:right;"><button class="btn-cancel" style="padding:6px 10px; margin-left:8px;" onclick="deleteAdminAnnouncement('${a.id}')">Delete</button></div>
                 </div>
             </div>`;
@@ -7076,14 +8120,71 @@ function displayAnnouncementsOnHome() {
     }
     container.innerHTML = list.slice().reverse().map(a => {
         const time = new Date(a.createdAt).toLocaleString();
+        const branchValues = Array.isArray(a.branches) ? a.branches.filter(Boolean) : a.branch ? [a.branch] : [];
+        const branchLine = branchValues.length ? `<div class="announcement-detail"><i class="fas fa-map-marker-alt"></i><strong>Branch:</strong> ${escapeHtml(branchValues.join(', '))}</div>` : '';
+        const scheduleLine = a.scheduledAt ? `<div class="announcement-detail"><i class="fas fa-calendar-alt"></i><strong>Date & Time:</strong> ${escapeHtml(a.scheduledAt)}</div>` : '';
         return `
             <div class="announcement-card">
-                <div style="font-weight:700; color:#0f172a;">${a.message}</div>
-                <div class="meta">${time} ${a.createdBy ? ' • ' + a.createdBy : ''}</div>
+                <div class="announcement-message">${escapeHtml(a.message)}</div>
+                <div class="announcement-details">${branchLine}${scheduleLine}</div>
+                <div class="meta">${time}${a.createdBy ? ' • ' + escapeHtml(a.createdBy) : ''}</div>
             </div>`;
     }).join('');
 }
 
-function clearAnnouncementDraft() { const el = document.getElementById('announcementText'); if (el) el.value = ''; }
+function clearAnnouncementDraft() {
+    const el = document.getElementById('announcementText');
+    if (el) el.value = '';
+    announcementBranchSelection = [];
+    updateAnnouncementBranchSummary();
+    const checkboxes = document.querySelectorAll('#announcementBranchModalList input[type="checkbox"]');
+    checkboxes.forEach(input => input.checked = false);
+    const dateInput = document.getElementById('announcementDate');
+    if (dateInput) dateInput.value = '';
+    const timeInput = document.getElementById('announcementTime');
+    if (timeInput) timeInput.value = '';
+}
+
+function openAnnouncementBranchModal() {
+    const overlay = document.getElementById('announcementBranchModalOverlay');
+    if (!overlay) return;
+    renderAnnouncementBranchModalList();
+    overlay.classList.remove('hidden');
+}
+
+function closeAnnouncementBranchModal() {
+    const overlay = document.getElementById('announcementBranchModalOverlay');
+    if (!overlay) return;
+    overlay.classList.add('hidden');
+}
+
+function renderAnnouncementBranchModalList() {
+    const container = document.getElementById('announcementBranchModalList');
+    if (!container) return;
+    const selected = new Set(announcementBranchSelection);
+    container.innerHTML = branches.map(branch => `
+        <label class="announcement-branch-checkbox ${selected.has(branch) ? 'checked' : ''}">
+            <input type="checkbox" value="${escapeHtml(branch)}" ${selected.has(branch) ? 'checked' : ''} />
+            <span>${escapeHtml(branch)}</span>
+        </label>
+    `).join('');
+}
+
+function updateAnnouncementBranchSummary() {
+    const summary = document.getElementById('announcementBranchSummary');
+    if (!summary) return;
+    if (!announcementBranchSelection || announcementBranchSelection.length === 0) {
+        summary.innerHTML = 'No branches selected. Tap to choose.';
+        return;
+    }
+    summary.innerHTML = announcementBranchSelection.map(branch => `<span class="announcement-branch-pill">${escapeHtml(branch)}</span>`).join(' ');
+}
+
+function saveAnnouncementBranchSelection() {
+    const checkboxes = document.querySelectorAll('#announcementBranchModalList input[type="checkbox"]');
+    announcementBranchSelection = Array.from(checkboxes).filter(input => input.checked).map(input => input.value.trim()).filter(Boolean);
+    updateAnnouncementBranchSummary();
+    closeAnnouncementBranchModal();
+}
 
 pushPcDataToCloud(); // Syncs the deletion instantly to all monitoring windows
