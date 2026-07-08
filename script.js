@@ -62,6 +62,57 @@ function isRemoteSyncActive() {
     return Boolean(firestoreDb);
 }
 
+// Hook localStorage.setItem so local changes automatically push to Firestore.
+// Uses a guard to avoid recursion when push functions write back to localStorage.
+(function installLocalStorageSyncHook() {
+    try {
+        const _origSetItem = Storage.prototype.setItem;
+        let _hookGuard = false;
+        Storage.prototype.setItem = function(key, value) {
+            _origSetItem.apply(this, [key, value]);
+            if (_hookGuard) return;
+            try {
+                if (key === 'pcData') {
+                    _hookGuard = true;
+                    try { pcData = JSON.parse(value); } catch (e) {}
+                    if (isRemoteSyncActive()) {
+                        try { pushPcDataToCloud(); } catch (e) { console.warn('pushPcDataToCloud failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'modificationHistory') {
+                    _hookGuard = true;
+                    try { modificationHistory = JSON.parse(value || '[]'); } catch (e) {}
+                    if (isRemoteSyncActive()) {
+                        try { pushHistoryToCloud(); } catch (e) { console.warn('pushHistoryToCloud failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'itStaffProfiles') {
+                    _hookGuard = true;
+                    try { /* keep local pcData in sync */ } catch (e) {}
+                    if (isRemoteSyncActive() && !remoteSyncApplying) {
+                        try { syncProfilesToRemote(JSON.parse(value || '{}')); } catch (e) { console.warn('syncProfilesToRemote failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'adminAnnouncements') {
+                    _hookGuard = true;
+                    try { /* no-op */ } catch (e) {}
+                    if (isRemoteSyncActive() && !remoteAnnouncementsApplying) {
+                        try { syncAnnouncementsToRemote(JSON.parse(value || '[]')); } catch (e) { console.warn('syncAnnouncementsToRemote failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+            } catch (e) { console.warn('localStorage hook error', e); _hookGuard = false; }
+        };
+    } catch (e) { console.warn('Failed to install localStorage sync hook', e); }
+})();
+
 // BroadcastChannel fallback for cross-tab sync when Firestore is unavailable
 let bhfBroadcast = null;
 try {
