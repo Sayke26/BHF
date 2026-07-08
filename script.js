@@ -176,13 +176,13 @@ async function initializeRemoteSync() {
                 if (!snap.exists) return;
                 const data = snap.data();
                 if (!data || !data.pcData) return;
-                
+
                 // Write the synchronized remote snapshot data to local cache memory
                 pcData = data.pcData;
                 localStorage.setItem("pcData", JSON.stringify(pcData));
-                
-                // Instantly re-render charts, tables, and metric summary modules across screens
-                if (typeof refreshAllViews === 'function') refreshAllViews();
+
+                // Debounced UI refresh to avoid rapid reflows/visual blinking
+                if (typeof scheduleRefreshAllViews === 'function') scheduleRefreshAllViews();
             }, (err) => console.error('PC remote pipeline subscription error:', err));
         } catch (e) { console.warn('PC dynamic registration hook blocked:', e); }
 
@@ -242,6 +242,57 @@ async function initializeRemoteSync() {
         announcementsPollIntervalId = setInterval(() => {
             try { fetchAnnouncementsFromRemote(); } catch (e) {}
         }, 8000);
+    } catch (e) { /* ignore */ }
+
+    // Debounced UI refresh helper to reduce visual blinking
+    let _pcRefreshTimer = null;
+    function scheduleRefreshAllViews(delay = 700) {
+        try {
+            if (_pcRefreshTimer) clearTimeout(_pcRefreshTimer);
+            _pcRefreshTimer = setTimeout(() => {
+                try {
+                    if (typeof refreshAllViews === 'function') refreshAllViews();
+                    else {
+                        if (typeof renderBranchGridDashboard === 'function') renderBranchGridDashboard();
+                        if (typeof updateOverallSummaryMetrics === 'function') updateOverallSummaryMetrics();
+                    }
+                } catch (e) { console.warn('scheduleRefreshAllViews error', e); }
+            }, delay);
+        } catch (e) { console.warn('scheduleRefreshAllViews scheduling failed', e); }
+    }
+
+    // Fallback polling for pcData: helps clients that miss onSnapshot updates
+    let pcDataPollIntervalId = null;
+    async function fetchPcDataFromRemote() {
+        if (!firestoreDb) return;
+        try {
+            const pcRef = firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc);
+            const snap = await pcRef.get();
+            if (!snap.exists) return;
+            const data = snap.data();
+            if (!data || !data.pcData) return;
+
+            const remotePcJson = JSON.stringify(data.pcData || {});
+            const localPcJson = JSON.stringify(pcData || {});
+            if (remotePcJson !== localPcJson) {
+                pcData = data.pcData;
+                localStorage.setItem('pcData', remotePcJson);
+                // Use debounced refresh to avoid UI flicker across clients
+                scheduleRefreshAllViews();
+                try { if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'pc-updated', pcData }); } catch (e) {}
+            }
+        } catch (e) {
+            console.warn('fetchPcDataFromRemote failed', e);
+            // If permission errors occur, surface status for debugging
+            updateRemoteSyncStatusDisplay('error', e.message || String(e));
+        }
+    }
+
+    try {
+        if (pcDataPollIntervalId) clearInterval(pcDataPollIntervalId);
+        pcDataPollIntervalId = setInterval(() => {
+            try { fetchPcDataFromRemote(); } catch (e) {}
+        }, 10000);
     } catch (e) { /* ignore */ }
 
 async function fetchAnnouncementsFromRemote() {
@@ -1301,10 +1352,27 @@ window.addEventListener('load', () => {
     }, 1000);
 });
 
+// Resilient remote-init: repeatedly attempt to initialize remote sync
+let _remoteInitIntervalId = null;
+function scheduleRemoteInit(retryIntervalMs = 3000, maxAttempts = 40) {
+    if (_remoteInitIntervalId) return;
+    let attempts = 0;
+    _remoteInitIntervalId = setInterval(() => {
+        attempts++;
+        try {
+            if (isFirebaseConfigured() && typeof firebase !== 'undefined' && !firestoreDb) {
+                initializeRemoteSync();
+            }
+        } catch (e) { console.debug('scheduleRemoteInit check failed', e); }
+        if (firestoreDb || attempts >= maxAttempts) {
+            clearInterval(_remoteInitIntervalId);
+            _remoteInitIntervalId = null;
+        }
+    }, retryIntervalMs);
+}
+
 window.addEventListener('load', () => {
-    if (isFirebaseConfigured()) {
-        initializeRemoteSync();
-    }
+    scheduleRemoteInit();
 });
 
 window.addEventListener('load', () => {
