@@ -73,6 +73,7 @@ let firebaseApp = null;
 let firestoreDb = null;
 let remoteSyncApplying = false;
 let remoteAnnouncementsApplying = false;
+let profileStorageSyncSuppressed = false;
 
 function isFirebaseConfigured() {
     return Boolean(window.firebaseConfig && window.firebaseConfig.projectId && window.firebaseConfig.apiKey);
@@ -90,7 +91,7 @@ function isRemoteSyncActive() {
         let _hookGuard = false;
         Storage.prototype.setItem = function(key, value) {
             _origSetItem.apply(this, [key, value]);
-            if (_hookGuard) return;
+            if (_hookGuard || profileStorageSyncSuppressed) return;
             try {
                 if (key === 'pcData') {
                     _hookGuard = true;
@@ -159,9 +160,14 @@ try {
         try {
             const msg = ev.data || {};
             if (msg.type === 'profiles-updated' && msg.profiles) {
-                // avoid overwriting if we're currently applying remote sync
-                if (!remoteSyncApplying) {
+                // avoid overwriting if we're currently applying remote sync or the data is unchanged
+                const currentRaw = localStorage.getItem('itStaffProfiles');
+                const incomingRaw = JSON.stringify(msg.profiles || {});
+                if (!remoteSyncApplying && currentRaw !== incomingRaw) {
                     persistStaffProfiles(msg.profiles, { skipRemote: true });
+                    renderITStaffProfileGrid();
+                    updateBHFMapStaffMarkers();
+                } else if (!remoteSyncApplying) {
                     renderITStaffProfileGrid();
                     updateBHFMapStaffMarkers();
                 }
@@ -216,6 +222,18 @@ async function initializeRemoteSync() {
                     
                     // Smoothly refresh the UI view structures
                     if (typeof updateITProfilesDisplay === 'function') updateITProfilesDisplay();
+                    
+                    // Check if currently logged-in user is still valid and enabled
+                    if (adminAuthenticated && adminUserKey) {
+                        const currentUserProfile = remoteData.profiles[adminUserKey];
+                        if (!currentUserProfile || !currentUserProfile.id || currentUserProfile.disabled === true) {
+                            // Current user was deleted or disabled, force logout
+                            const reason = !currentUserProfile ? 'Your account has been deleted.' : 'Your account has been disabled.';
+                            if (typeof forceLogoutDueToStatusChange === 'function') {
+                                forceLogoutDueToStatusChange(reason);
+                            }
+                        }
+                    }
                 } finally {
                     remoteSyncApplying = false;
                 }
@@ -1315,6 +1333,7 @@ function saveNewRole() {
 
 // Current authenticated admin username (profile id key)
 let adminUserKey = sessionStorage.getItem('adminUserKey') || null;
+let currentUserStatusListener = null; // Listener for monitoring current user's profile status
 let itShiftHistory = JSON.parse(localStorage.getItem('itShiftHistory') || '[]');
 
 function addShiftHistoryEntry(action, staffKey, details) {
@@ -1395,7 +1414,21 @@ function autoRepairStoredProfiles(storedProfiles) {
 }
 
 function persistStaffProfiles(profiles, options = {}) {
-    localStorage.setItem('itStaffProfiles', JSON.stringify(profiles));
+    const incomingRaw = JSON.stringify(profiles || {});
+    const currentRaw = localStorage.getItem('itStaffProfiles');
+    if (currentRaw === incomingRaw && !options.force) {
+        if (!options.skipRemote && !remoteSyncApplying && isRemoteSyncActive()) {
+            syncProfilesToRemote(profiles);
+        }
+        return;
+    }
+
+    profileStorageSyncSuppressed = true;
+    try {
+        localStorage.setItem('itStaffProfiles', incomingRaw);
+    } finally {
+        profileStorageSyncSuppressed = false;
+    }
     try {
         if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'profiles-updated', profiles });
     } catch (e) { /* ignore */ }
@@ -1941,10 +1974,27 @@ function renderITStaffProfileGrid() {
     if (!grid) return;
 
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
-    const useMobileCarousel = isMobile;
-    const showCarouselControls = isMobile && profiles.length > 3;
+    const layoutClass = isMobile ? 'profile-grid-mobile' : '';
+    const profileSignature = profiles.map((profile) => {
+        const shiftStatus = profile.shiftStatus || (profile.location ? 'live' : 'offline');
+        return `${profile.id}|${profile.name}|${profile.role}|${profile.location || ''}|${profile.phone || ''}|${profile.email || ''}|${profile.remarks || ''}|${shiftStatus}`;
+    }).join('::');
+    const existingSignature = grid.dataset.profileSignature || '';
+    const existingLayout = grid.dataset.profileLayout || '';
 
-    grid.className = `profile-grid${isMobile ? ' profile-grid-mobile' : ''}`;
+    if (existingSignature === profileSignature && existingLayout === layoutClass) {
+        if (countEl) {
+            const expectedCountText = `${profiles.length} IT Specialists`;
+            if (countEl.textContent !== expectedCountText) {
+                countEl.textContent = expectedCountText;
+            }
+        }
+        return;
+    }
+
+    grid.className = `profile-grid${layoutClass ? ` ${layoutClass}` : ''}`;
+    grid.dataset.profileSignature = profileSignature;
+    grid.dataset.profileLayout = layoutClass;
 
     const cardHTML = profiles.map((profile) => {
         const contactLine = profile.email ? `${profile.phone} · ${profile.email}` : `${profile.phone}`;
@@ -1982,24 +2032,15 @@ function renderITStaffProfileGrid() {
         `;
     }).join('');
 
-    if (useMobileCarousel) {
+    if (isMobile) {
+        // Simple grid layout for mobile - no carousel
         grid.innerHTML = `
-            ${showCarouselControls ? `
-                <div class="profile-carousel-controls">
-                    <button type="button" class="profile-carousel-btn" onclick="moveProfileCarousel(-1)" aria-label="Show previous IT profiles">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <span class="profile-carousel-label">Swipe through the team</span>
-                    <button type="button" class="profile-carousel-btn" onclick="moveProfileCarousel(1)" aria-label="Show next IT profiles">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            ` : ''}
             <div class="profile-card-track profile-card-track-carousel">
                 ${cardHTML}
             </div>
         `;
     } else {
+        // Desktop multi-column layout
         grid.innerHTML = cardHTML;
     }
 
@@ -2341,6 +2382,10 @@ function scheduleRemoteInit(retryIntervalMs = 3000, maxAttempts = 40) {
             if (isFirebaseConfigured() && typeof firebase !== 'undefined' && !firestoreDb) {
                 initializeRemoteSync();
             }
+            // Once Firebase is ready and user is authenticated, start monitoring
+            if (firestoreDb && adminAuthenticated && adminUserKey && !currentUserStatusListener) {
+                try { startMonitoringCurrentUserStatus(adminUserKey); } catch (e) { console.warn('Failed to start monitoring after Firebase init:', e); }
+            }
         } catch (e) { console.debug('scheduleRemoteInit check failed', e); }
         if (firestoreDb || attempts >= maxAttempts) {
             clearInterval(_remoteInitIntervalId);
@@ -2356,6 +2401,13 @@ window.addEventListener('load', () => {
 window.addEventListener('load', () => {
     try { displayAnnouncementsOnHome(); } catch (e) {}
     try { renderITStaffProfileGrid(); } catch (e) {}
+});
+
+window.addEventListener('load', () => {
+    // Initialize user status monitoring if already authenticated
+    if (adminAuthenticated && adminUserKey && firestoreDb) {
+        try { startMonitoringCurrentUserStatus(adminUserKey); } catch (e) { console.warn('Failed to start user monitoring:', e); }
+    }
 });
 
 function updateBHFMapStaffMarkers() {
@@ -2389,6 +2441,28 @@ function updateBHFMapStaffMarkers() {
     // Use session auth so password is asked once per session and does not persist across page reloads/new visits.
     try {
         adminAuthenticated = sessionStorage.getItem('adminAuthenticated') === '1';
+        if (adminAuthenticated) {
+            adminUserKey = sessionStorage.getItem('adminUserKey') || null;
+            
+            // Validate that the session user still exists and is enabled
+            const profiles = getStoredStaffProfiles();
+            if (adminUserKey && profiles[adminUserKey]) {
+                const userProfile = profiles[adminUserKey];
+                if (userProfile.disabled === true || !userProfile.id) {
+                    // User was disabled or deleted, clear session
+                    adminAuthenticated = false;
+                    adminUserKey = null;
+                    try { sessionStorage.removeItem('adminAuthenticated'); } catch (e) {}
+                    try { sessionStorage.removeItem('adminUserKey'); } catch (e) {}
+                }
+            } else if (adminUserKey) {
+                // User profile not found, clear session
+                adminAuthenticated = false;
+                adminUserKey = null;
+                try { sessionStorage.removeItem('adminAuthenticated'); } catch (e) {}
+                try { sessionStorage.removeItem('adminUserKey'); } catch (e) {}
+            }
+        }
     } catch (e) {
         adminAuthenticated = false;
     }
@@ -4234,10 +4308,29 @@ function verifyAdminCredentials() {
     const profiles = getStoredStaffProfiles();
     const usernameLower = username.toLowerCase();
     const matchedKey = Object.keys(profiles).find(k => ((profiles[k].username||'').toLowerCase() === usernameLower) && profiles[k].password === password);
+    
     if (matchedKey) {
+        const staffProfile = profiles[matchedKey];
+        
+        // Check if staff is disabled or deleted
+        if (staffProfile.disabled === true) {
+            toastNotice('error', 'Account Disabled', 'This staff account has been disabled and cannot access the system.');
+            return;
+        }
+        
+        // Additional check: ensure the staff profile exists and is valid
+        if (!staffProfile || !staffProfile.id) {
+            toastNotice('error', 'Invalid Account', 'This staff account is no longer valid.');
+            return;
+        }
+        
         adminAuthenticated = true;
         adminUserKey = matchedKey;
         try { sessionStorage.setItem('adminAuthenticated', '1'); sessionStorage.setItem('adminUserKey', adminUserKey); } catch(e) {}
+        
+        // Start monitoring this staff member's profile for real-time updates
+        startMonitoringCurrentUserStatus(matchedKey);
+        
         closeAdminPinModal();
         // If an IT staff profile modal is open, close it when admin signs in
         try { closeStaffProfileModal(); } catch (e) { /* ignore if modal not present */ }
@@ -4260,7 +4353,7 @@ function verifyAdminCredentials() {
         } else {
             openAdminPage();
         }
-        toastNotice('success', 'Signed In', `Signed in as ${profiles[matchedKey].name}`);
+        toastNotice('success', 'Signed In', `Signed in as ${staffProfile.name}`);
     } else {
         toastNotice('error', 'Sign In Failed', 'Invalid username or password.');
     }
@@ -4270,6 +4363,13 @@ function logoutAdmin() {
     adminAuthenticated = false;
     try { sessionStorage.removeItem('adminAuthenticated'); } catch (e) {}
     try { sessionStorage.removeItem('adminUserKey'); } catch (e) {}
+    
+    // Stop monitoring current user status
+    if (currentUserStatusListener) {
+        try { currentUserStatusListener(); } catch (e) {}
+        currentUserStatusListener = null;
+    }
+    
     adminUserKey = null;
     closeSideMenu();
     updateNavVisibility();
@@ -4278,6 +4378,81 @@ function logoutAdmin() {
     hideAllPages();
     goHome();
     toastNotice('info', 'Signed out', 'Administrator session has been logged out and the home view is restored.');
+}
+
+// Monitor the current logged-in user's profile for real-time status changes
+// If they get disabled or deleted, automatically log them out
+function startMonitoringCurrentUserStatus(staffKey) {
+    // Cancel any existing listener first
+    if (currentUserStatusListener) {
+        try { currentUserStatusListener(); } catch (e) {}
+        currentUserStatusListener = null;
+    }
+    
+    // Only set up listener if Firebase is configured and connected
+    if (!firestoreDb) {
+        console.debug('[Monitor] Firebase not ready, skipping user status monitoring');
+        return;
+    }
+    
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
+        
+        // Set up real-time listener for staff profiles
+        currentUserStatusListener = docRef.onSnapshot((snapshot) => {
+            if (!snapshot.exists) return;
+            
+            const remoteData = snapshot.data();
+            if (!remoteData || typeof remoteData.profiles !== 'object') return;
+            
+            const currentUserProfile = remoteData.profiles[staffKey];
+            
+            // If user profile doesn't exist anymore (deleted), force logout
+            if (!currentUserProfile || !currentUserProfile.id) {
+                console.warn('[Monitor] Current user profile was deleted, forcing logout');
+                forceLogoutDueToStatusChange('Your account has been permanently deleted.');
+                return;
+            }
+            
+            // If user profile is now disabled, force logout
+            if (currentUserProfile.disabled === true) {
+                console.warn('[Monitor] Current user profile was disabled, forcing logout');
+                forceLogoutDueToStatusChange('Your account has been disabled and you have been logged out.');
+                return;
+            }
+        }, (error) => {
+            console.error('[Monitor] Error monitoring user status:', error);
+        });
+    } catch (e) {
+        console.warn('[Monitor] Failed to set up user status monitoring:', e);
+    }
+}
+
+// Force logout and show a message about why
+function forceLogoutDueToStatusChange(reason) {
+    if (!adminAuthenticated) return; // Already logged out
+    
+    // Perform logout
+    adminAuthenticated = false;
+    try { sessionStorage.removeItem('adminAuthenticated'); } catch (e) {}
+    try { sessionStorage.removeItem('adminUserKey'); } catch (e) {}
+    
+    // Stop monitoring
+    if (currentUserStatusListener) {
+        try { currentUserStatusListener(); } catch (e) {}
+        currentUserStatusListener = null;
+    }
+    
+    adminUserKey = null;
+    closeSideMenu();
+    updateNavVisibility();
+    populateITTrackerControls();
+    refreshHistoryDeletionControls();
+    hideAllPages();
+    goHome();
+    
+    // Show critical message about the logout reason
+    toastNotice('error', 'Session Terminated', reason);
 }
 
 // Prompt admin verification specifically for a branch (used by Immediate Action cards)
@@ -4748,40 +4923,94 @@ function closeStaffFeedbackCompareResultOverlay() {
     document.body.classList.remove('no-scroll');
 }
 
-function downloadStaffFeedbackCompareResultChart() {
-    const card = document.querySelector('#staffFeedbackCompareResultOverlay .compare-modal-card');
-    if (!card || !window.html2canvas) {
-        downloadStaffFeedbackCompareResultPNG();
-        return;
+function exportElementToPdf(element, filename) {
+    if (!element || !window.html2canvas || !window.jspdf?.jsPDF) {
+        alert('PDF export is not available right now. Please try again.');
+        return Promise.reject(new Error('PDF export unavailable'));
     }
-    const originalStyles = { maxHeight: card.style.maxHeight, overflow: card.style.overflow };
-    card.style.maxHeight = 'none';
-    card.style.overflow = 'visible';
-    html2canvas(card, { scale: 2, useCORS: true }).then(canvas => {
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = 'staff-feedback-comparison.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        card.style.maxHeight = originalStyles.maxHeight;
-        card.style.overflow = originalStyles.overflow;
-    }).catch(() => {
-        card.style.maxHeight = originalStyles.maxHeight;
-        card.style.overflow = originalStyles.overflow;
-        downloadStaffFeedbackCompareResultPNG();
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const margin = 8;
+
+    return html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        allowTaint: true,
+        width: element.scrollWidth || element.offsetWidth || 1400,
+        windowWidth: element.scrollWidth || element.offsetWidth || 1400
+    }).then((canvas) => {
+        const imageData = canvas.toDataURL('image/png');
+        const canvasRatio = canvas.width / canvas.height;
+        const maxWidth = pageWidth - (margin * 2);
+        const maxHeight = pageHeight - (margin * 2);
+        let scaledWidth = maxWidth;
+        let scaledHeight = scaledWidth / canvasRatio;
+
+        if (scaledHeight > maxHeight) {
+            scaledHeight = maxHeight;
+            scaledWidth = scaledHeight * canvasRatio;
+        }
+
+        const x = (pageWidth - scaledWidth) / 2;
+        const y = (pageHeight - scaledHeight) / 2;
+
+        pdf.addImage(imageData, 'PNG', x, y, scaledWidth, scaledHeight);
+        pdf.save(filename);
     });
 }
 
-function downloadStaffFeedbackCompareResultPNG() {
-    const canvas = document.getElementById('staffFeedbackCompareResultChart');
-    if (!canvas) return;
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = 'staff-feedback-comparison.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+function downloadStaffFeedbackCompareResultChart() {
+    const modal = document.getElementById('staffFeedbackCompareResultOverlay');
+    const card = document.querySelector('#staffFeedbackCompareResultOverlay .compare-modal-card');
+    if (!card || !modal) {
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = '0';
+    wrapper.style.top = '0';
+    wrapper.style.width = '1600px';
+    wrapper.style.backgroundColor = '#ffffff';
+    wrapper.style.padding = '24px';
+    wrapper.style.boxSizing = 'border-box';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.fontSize = '12px';
+    wrapper.style.lineHeight = '1.4';
+    wrapper.style.color = '#0f172a';
+
+    const header = document.createElement('div');
+    header.style.marginBottom = '20px';
+    header.innerHTML = `
+        <div style="font-size: 20px; font-weight: bold; color: #102d6d; margin-bottom: 6px;">Staff Feedback Comparison Report</div>
+        <div style="font-size: 11px; color: #64748b;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(header);
+
+    const cardClone = card.cloneNode(true);
+    cardClone.style.maxHeight = 'none';
+    cardClone.style.overflow = 'visible';
+    wrapper.appendChild(cardClone);
+    document.body.appendChild(wrapper);
+
+    exportElementToPdf(wrapper, 'staff-feedback-comparison.pdf')
+        .then(() => {
+            toastNotice('success', 'Download complete', 'Staff feedback report exported successfully.');
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the feedback report.');
+            console.warn('Failed to export staff feedback comparison as PDF.');
+        })
+        .finally(() => {
+            if (wrapper.parentNode) {
+                document.body.removeChild(wrapper);
+            }
+        });
 }
 
 function getAnalysisFilters() {
@@ -5304,49 +5533,274 @@ function closeAnalysisCompareResultOverlay() {
 }
 
 function downloadAnalysisCompareResultChart() {
+    const modal = document.getElementById('analysisCompareResultOverlay');
     const card = document.querySelector('#analysisCompareResultOverlay .compare-modal-card');
-    if (!card || !window.html2canvas) {
-        downloadAnalysisCompareResultPNG();
+    if (!card || !modal) {
         return;
     }
 
-    const originalStyles = {
-        maxHeight: card.style.maxHeight,
-        overflow: card.style.overflow
-    };
-    card.style.maxHeight = 'none';
-    card.style.overflow = 'visible';
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.left = '0';
+    wrapper.style.top = '0';
+    wrapper.style.width = '1600px';
+    wrapper.style.backgroundColor = '#ffffff';
+    wrapper.style.padding = '24px';
+    wrapper.style.boxSizing = 'border-box';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.fontSize = '12px';
+    wrapper.style.lineHeight = '1.4';
+    wrapper.style.color = '#0f172a';
 
-    html2canvas(card, { scale: 2, useCORS: true }).then(canvas => {
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = 'branch-comparison.png';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        card.style.maxHeight = originalStyles.maxHeight;
-        card.style.overflow = originalStyles.overflow;
-    }).catch(() => {
-        card.style.maxHeight = originalStyles.maxHeight;
-        card.style.overflow = originalStyles.overflow;
-        downloadAnalysisCompareResultPNG();
-    });
+    const header = document.createElement('div');
+    header.style.marginBottom = '20px';
+    header.innerHTML = `
+        <div style="font-size: 20px; font-weight: bold; color: #102d6d; margin-bottom: 6px;">Branch Comparison Report</div>
+        <div style="font-size: 11px; color: #64748b;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(header);
+
+    const cardClone = card.cloneNode(true);
+    cardClone.style.maxHeight = 'none';
+    cardClone.style.overflow = 'visible';
+    wrapper.appendChild(cardClone);
+    document.body.appendChild(wrapper);
+
+    exportElementToPdf(wrapper, 'branch-comparison.pdf')
+        .then(() => {
+            toastNotice('success', 'Download complete', 'Branch comparison report exported successfully.');
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the comparison report.');
+            console.warn('Failed to export analysis comparison as PDF.');
+        })
+        .finally(() => {
+            if (wrapper.parentNode) {
+                document.body.removeChild(wrapper);
+            }
+        });
 }
 
-function downloadAnalysisCompareResultPNG() {
-    const canvas = document.getElementById('analysisCompareResultChart');
+function downloadAnalysisPagePdf() {
+    const analysisSection = document.querySelector('#analysisPage .section-title-bar');
+    const metricsSection = document.querySelector('#analysisPage .metrics-card-grid');
+    const chartSections = Array.from(document.querySelectorAll('#analysisPage .chart-box'));
+    const tablePanel = document.querySelector('#analysisPage .table-frame-panel');
+
+    if (!analysisSection || !metricsSection) {
+        toastNotice('error', 'Export failed', 'Analysis content is not available for export.');
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '1800px';
+    wrapper.style.padding = '24px';
+    wrapper.style.background = '#ffffff';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.color = '#0f172a';
+
+    const title = document.createElement('div');
+    title.innerHTML = `
+        <div style="font-size:24px; font-weight:700; color:#102d6d; margin-bottom:6px;">BHF Analysis Report</div>
+        <div style="font-size:12px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(title);
+    wrapper.appendChild(metricsSection.cloneNode(true));
+
+    chartSections.forEach(section => {
+        wrapper.appendChild(section.cloneNode(true));
+    });
+
+    if (tablePanel) {
+        wrapper.appendChild(tablePanel.cloneNode(true));
+    }
+
+    document.body.appendChild(wrapper);
+
+    exportElementToPdf(wrapper, 'analysis-report.pdf')
+        .then(() => {
+            toastNotice('success', 'Export complete', 'Analysis report exported as PDF.');
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to generate the analysis PDF.');
+        })
+        .finally(() => {
+            if (wrapper.parentNode) {
+                wrapper.parentNode.removeChild(wrapper);
+            }
+        });
+}
+
+function exportAnalysisMetricToPdf(elementId, title) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '1400px';
+    wrapper.style.padding = '24px';
+    wrapper.style.background = '#ffffff';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.color = '#0f172a';
+
+    const header = document.createElement('div');
+    header.innerHTML = `
+        <div style="font-size:20px; font-weight:700; color:#102d6d; margin-bottom:6px;">${title}</div>
+        <div style="font-size:11px; color:#64748b; margin-bottom:20px;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(header);
+
+    const metricContainer = document.createElement('div');
+    metricContainer.style.marginBottom = '24px';
+    metricContainer.style.display = 'flex';
+    metricContainer.style.alignItems = 'center';
+    metricContainer.style.gap = '20px';
+    metricContainer.style.padding = '16px';
+    metricContainer.style.backgroundColor = '#f8fafc';
+    metricContainer.style.borderRadius = '6px';
+
+    const metricIcon = document.createElement('div');
+    metricIcon.style.fontSize = '48px';
+    metricIcon.style.color = '#102d6d';
+    metricIcon.innerHTML = '<i class="fas fa-chart-bar"></i>';
+
+    const metricValue = document.createElement('div');
+    metricValue.innerHTML = `
+        <div style="font-size:32px; font-weight:700; color:#102d6d;">${element.textContent || '0'}</div>
+        <div style="font-size:13px; color:#64748b; margin-top:4px;">${title}</div>
+    `;
+
+    metricContainer.appendChild(metricIcon);
+    metricContainer.appendChild(metricValue);
+    wrapper.appendChild(metricContainer);
+
+    const summaryTable = document.querySelector('#analysisPage .table-frame-panel table');
+    if (summaryTable) {
+        const tableClone = summaryTable.cloneNode(true);
+        tableClone.style.width = '100%';
+        tableClone.style.borderCollapse = 'collapse';
+        
+        const rows = tableClone.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('th, td');
+            cells.forEach(cell => {
+                cell.style.padding = '10px';
+                cell.style.border = '1px solid #e2e8f0';
+                cell.style.textAlign = 'left';
+            });
+            const headerCells = row.querySelectorAll('th');
+            if (headerCells.length > 0) {
+                row.style.backgroundColor = '#f1f5f9';
+                headerCells.forEach(th => {
+                    th.style.fontWeight = '700';
+                    th.style.color = '#0f172a';
+                });
+            }
+        });
+
+        const tableWrapper = document.createElement('div');
+        tableWrapper.style.marginTop = '16px';
+        const tableLabel = document.createElement('div');
+        tableLabel.innerHTML = '<div style="font-size:14px; font-weight:700; color:#102d6d; margin-bottom:12px;">Branch Performance Data</div>';
+        tableWrapper.appendChild(tableLabel);
+        tableWrapper.appendChild(tableClone);
+        wrapper.appendChild(tableWrapper);
+    }
+
+    document.body.appendChild(wrapper);
+    exportElementToPdf(wrapper, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the selected metric.');
+        })
+        .finally(() => {
+            if (wrapper.parentNode) {
+                wrapper.parentNode.removeChild(wrapper);
+            }
+        });
+}
+
+function exportAnalysisSectionToPdf(canvasId, title) {
+    const canvas = document.getElementById(canvasId);
     if (!canvas) return;
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = 'branch-comparison.png';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    const chartBox = canvas.closest('.chart-box');
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '1600px';
+    wrapper.style.padding = '24px';
+    wrapper.style.background = '#ffffff';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.color = '#0f172a';
+
+    const label = document.createElement('div');
+    label.innerHTML = `
+        <div style="font-size:20px; font-weight:700; color:#102d6d; margin-bottom:6px;">${title}</div>
+        <div style="font-size:11px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(label);
+
+    if (chartBox) {
+        const chartBoxClone = chartBox.cloneNode(true);
+        chartBoxClone.style.width = '100%';
+        chartBoxClone.style.margin = '0';
+        chartBoxClone.style.overflow = 'visible';
+        
+        const clonedCanvas = chartBoxClone.querySelector('canvas');
+        if (clonedCanvas && canvas) {
+            clonedCanvas.style.width = canvas.offsetWidth + 'px';
+            clonedCanvas.style.height = canvas.offsetHeight + 'px';
+        }
+        
+        wrapper.appendChild(chartBoxClone);
+    } else {
+        wrapper.appendChild(canvas.cloneNode(true));
+    }
+
+    document.body.appendChild(wrapper);
+    
+    setTimeout(() => {
+        exportElementToPdf(wrapper, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
+            .catch(() => {
+                toastNotice('error', 'Export failed', 'Unable to export the selected chart.');
+            })
+            .finally(() => {
+                if (wrapper.parentNode) {
+                    wrapper.parentNode.removeChild(wrapper);
+                }
+            });
+    }, 100);
+}
+
+function exportAnalysisTableToPdf() {
+    const tablePanel = document.querySelector('#analysisPage .table-frame-panel');
+    if (!tablePanel) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '1800px';
+    wrapper.style.padding = '24px';
+    wrapper.style.background = '#ffffff';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.color = '#0f172a';
+
+    wrapper.innerHTML = `
+        <div style="font-size:22px; font-weight:700; color:#102d6d; margin-bottom:10px;">Branch Performance Summary</div>
+        <div style="font-size:12px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(tablePanel.cloneNode(true));
+
+    document.body.appendChild(wrapper);
+    exportElementToPdf(wrapper, 'branch-performance-summary.pdf')
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the performance summary.');
+        })
+        .finally(() => {
+            if (wrapper.parentNode) {
+                wrapper.parentNode.removeChild(wrapper);
+            }
+        });
 }
 
 function downloadInventoryFindings() {
-    if (!window.html2canvas) {
-        alert('Download feature not available. Please try again.');
+    if (!window.html2canvas || !window.jspdf?.jsPDF) {
+        alert('PDF export feature is not available right now. Please try again.');
         return;
     }
 
@@ -5493,36 +5947,22 @@ function downloadInventoryFindings() {
     wrapper.appendChild(tableClone);
     document.body.appendChild(wrapper);
 
-    // Render to canvas with a slight delay
+    // Render to PDF with a slight delay
     setTimeout(() => {
-        html2canvas(wrapper, { 
-            scale: 1.5,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            allowTaint: true,
-            logging: false,
-            width: 1600,
-            windowWidth: 1600
-        }).then(canvas => {
-            // Download as PNG
-            const link = document.createElement('a');
-            const timestamp = new Date().toISOString().slice(0, 10);
-            link.href = canvas.toDataURL('image/png');
-            link.download = `inventory-findings-${timestamp}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            toastNotice('success', 'Download Complete', 'Inventory findings downloaded successfully');
-        }).catch(err => {
-            console.error('Error downloading inventory findings:', err);
-            alert('Failed to download inventory findings. Please try again.');
-        }).finally(() => {
-            const clone = document.getElementById('inventoryFindingsDownloadClone');
-            if (clone && clone.parentNode) {
-                document.body.removeChild(clone);
-            }
-        });
+        exportElementToPdf(wrapper, `inventory-findings-${new Date().toISOString().slice(0, 10)}.pdf`)
+            .then(() => {
+                toastNotice('success', 'Download Complete', 'Inventory findings exported as PDF successfully');
+            })
+            .catch(err => {
+                console.error('Error downloading inventory findings:', err);
+                alert('Failed to export inventory findings as PDF. Please try again.');
+            })
+            .finally(() => {
+                const clone = document.getElementById('inventoryFindingsDownloadClone');
+                if (clone && clone.parentNode) {
+                    document.body.removeChild(clone);
+                }
+            });
     }, 100);
 }
 
@@ -6061,6 +6501,80 @@ function closeMetricSummary() {
     if (overlay) overlay.classList.add('hidden');
     document.body.classList.remove('no-scroll');
     activeMetricSummaryKey = null;
+}
+
+function downloadCurrentMetricSummary() {
+    if (!activeMetricSummaryKey) return;
+
+    const metricTitles = {
+        'analysisProblemCount': 'Total Reported Issues',
+        'analysisPerformanceScore': 'Average Branch Performance',
+        'analysisBreakdowns': 'Branch Breakdowns',
+        'analysisWorstCategory': 'Most Common Problem',
+        'analysisTopBranch': 'Branch With Most Problems',
+        'branches': 'Monitored Properties',
+        'pcs': 'Aggregated Global Terminals',
+        'healthy': 'Healthy Systems',
+        'maintenance': 'Maintenance Status',
+        'issues': 'Reported Issues'
+    };
+
+    const title = metricTitles[activeMetricSummaryKey] || 'Metric Summary';
+    const modal = document.querySelector('.metric-summary-modal');
+    if (!modal) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width = '1400px';
+    wrapper.style.padding = '24px';
+    wrapper.style.background = '#ffffff';
+    wrapper.style.fontFamily = 'Arial, sans-serif';
+    wrapper.style.color = '#0f172a';
+
+    const header = document.createElement('div');
+    header.innerHTML = `
+        <div style="font-size:20px; font-weight:700; color:#102d6d; margin-bottom:6px;">${title}</div>
+        <div style="font-size:11px; color:#64748b; margin-bottom:20px;">Generated: ${new Date().toLocaleString()}</div>
+    `;
+    wrapper.appendChild(header);
+
+    const modalClone = modal.cloneNode(true);
+    const closeButton = modalClone.querySelector('.delete-btn');
+    if (closeButton) closeButton.remove();
+    const downloadButton = modalClone.querySelector('.add-btn');
+    if (downloadButton) downloadButton.remove();
+    
+    const headerSection = modalClone.querySelector('.summary-panel-header');
+    if (headerSection) {
+        headerSection.style.borderBottom = '1px solid #e2e8f0';
+        headerSection.style.paddingBottom = '16px';
+        headerSection.style.marginBottom = '16px';
+    }
+
+    const content = modalClone.querySelector('.summary-panel-content');
+    if (content) {
+        content.style.width = '100%';
+    }
+
+    const allElements = modalClone.querySelectorAll('*');
+    allElements.forEach(el => {
+        if (el.style.maxHeight) el.style.maxHeight = 'none';
+        if (el.style.overflow) el.style.overflow = 'visible';
+    });
+
+    wrapper.appendChild(modalClone);
+    document.body.appendChild(wrapper);
+
+    setTimeout(() => {
+        exportElementToPdf(wrapper, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
+            .catch(() => {
+                toastNotice('error', 'Export failed', 'Unable to export the metric summary.');
+            })
+            .finally(() => {
+                if (wrapper.parentNode) {
+                    wrapper.parentNode.removeChild(wrapper);
+                }
+            });
+    }, 100);
 }
 
 function closeInventoryFindings() {

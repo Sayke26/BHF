@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
@@ -414,7 +415,7 @@
                 </div>
             </div>
 
-            <div class="metrics-card-grid structural-five-column" style="margin-bottom: 24px;">
+            <div class="metrics-card-grid structural-five-column" style="margin-bottom: 12px;">
                 <div class="metric-card card-blue clickable" onclick="showMetricSummary('analysisTopBranch')">
                     <div class="card-icon"><i class="fas fa-exclamation-circle"></i></div>
                     <div class="card-info"><h4 id="analysisTopBranch">N/A</h4><p>Branch With Most Problems</p></div>
@@ -440,8 +441,11 @@
             <div class="chart-grid analysis-chart-grid">
                 <div class="chart-box analysis-chart-box">
                     <div class="chart-title-row">
-                        <h3>Issue Volume by Branch</h3>
-                        <span class="chart-caption">Issue counts for each branch in the selected period</span>
+                        <div>
+                            <h3>Issue Volume by Branch</h3>
+                            <span class="chart-caption">Issue counts for each branch in the selected period</span>
+                        </div>
+                        <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:8px; white-space:nowrap;" onclick="exportAnalysisSectionToPdf('analysisBranchIssuesChart', 'Issue Volume by Branch')"><i class="fas fa-download"></i> Download</button>
                     </div>
                     <div class="chart-canvas-wrapper chart-canvas-wrapper-large analysis-branch-chart-wrapper"><canvas id="analysisBranchIssuesChart"></canvas></div>
                 </div>
@@ -450,15 +454,21 @@
             <div class="chart-grid analysis-chart-grid">
                 <div class="chart-box analysis-chart-box">
                     <div class="chart-title-row">
-                        <h3>Problem Category Breakdown</h3>
-                        <span class="chart-caption">Category share shown with counts and percentages</span>
+                        <div>
+                            <h3>Problem Category Breakdown</h3>
+                            <span class="chart-caption">Category share shown with counts and percentages</span>
+                        </div>
+                        <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:8px; white-space:nowrap;" onclick="exportAnalysisSectionToPdf('analysisProblemCategoryChart', 'Problem Category Breakdown')"><i class="fas fa-download"></i> Download</button>
                     </div>
                     <div class="chart-canvas-wrapper chart-canvas-wrapper-large"><canvas id="analysisProblemCategoryChart"></canvas></div>
                 </div>
             </div>
 
             <div class="table-frame-panel" style="margin-top: 24px;">
-                <h3>Branch Performance Summary</h3>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                    <h3>Branch Performance Summary</h3>
+                    <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:8px;" onclick="exportAnalysisTableToPdf()"><i class="fas fa-download"></i> Download</button>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -677,7 +687,7 @@
                 <div class="compare-modal-footer" style="align-items:center; gap:12px; flex-wrap:wrap;">
                     <button type="button" class="btn-cancel" onclick="closeAnalysisCompareResultOverlay()">Close</button>
                     <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:260px; justify-content:flex-end;">
-                        <button id="analysisCompareDownloadBtn" type="button" class="add-btn" style="background:#16a34a; color:white;">Download PNG</button>
+                        <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:8px;" onclick="downloadAnalysisCompareResultChart()"><i class="fas fa-download"></i> Download PDF</button>
                     </div>
                 </div>
             </div>
@@ -883,7 +893,7 @@
                 <div class="compare-modal-footer" style="align-items:center; gap:12px; flex-wrap:wrap;">
                     <button type="button" class="btn-cancel" onclick="closeStaffFeedbackCompareResultOverlay()">Close</button>
                     <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:260px; justify-content:flex-end;">
-                        <button id="staffFeedbackCompareDownloadBtn" type="button" class="add-btn" style="background:#16a34a; color:white;">Download PNG</button>
+                        <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:8px;" onclick="downloadStaffFeedbackCompareResultChart()"><i class="fas fa-download"></i> Download PDF</button>
                     </div>
                 </div>
             </div>
@@ -1520,6 +1530,7 @@
                         <p id="metricSummarySubtitle" class="summary-panel-subtitle"></p>
                     </div>
                     <div class="summary-panel-actions">
+                        <button type="button" class="add-btn" style="background:#16a34a; color:white; display:flex; align-items:center; gap:6px;" onclick="downloadCurrentMetricSummary()"><i class="fas fa-download"></i> Download</button>
                         <button onclick="closeMetricSummary()" class="delete-btn">Close</button>
                     </div>
                 </div>
