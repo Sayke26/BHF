@@ -385,6 +385,174 @@ button, input, select, textarea { font: inherit; }
     position: relative;
     overflow: hidden;
 }
+
+.profile-carousel-controls {
+    display: none;
+}
+
+.profile-grid-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.profile-grid-mobile .profile-carousel-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.profile-grid-mobile .profile-carousel-btn {
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    color: #ffffff;
+    box-shadow: 0 12px 22px rgba(37, 99, 235, 0.24);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-grid-mobile .profile-carousel-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.profile-grid-mobile .profile-card-track {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+}
+
+.profile-grid-mobile .profile-card-track::-webkit-scrollbar {
+    display: none;
+}
+
+.profile-grid-mobile .profile-card-track .profile-card {
+    flex: 0 0 calc((100vw - 56px) / 3);
+    max-width: calc((100vw - 56px) / 3);
+    min-width: 0;
+    padding: 12px;
+    border-radius: 18px;
+    gap: 10px;
+    scroll-snap-align: start;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-grid-mobile .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 0 0 150px;
+    min-height: 150px;
+    display: flex;
+}
+
+.profile-grid-mobile .profile-header > div {
+    margin: 0;
+    padding: 0;
+    min-height: 65px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.profile-grid-mobile .profile-header img,
+.profile-grid-mobile .profile-avatar-placeholder {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    border-width: 3px;
+}
+
+.profile-grid-mobile .profile-header h3 {
+    font-size: 15px;
+    line-height: 1.2;
+    margin: 0 0 4px 0;
+    min-height: 18px;
+    padding: 0;
+}
+
+.profile-grid-mobile .profile-role {
+    font-size: 11px;
+    line-height: 1.2;
+    min-height: 13px;
+    margin: 0 0 2px 0;
+    padding: 0;
+}
+
+.profile-grid-mobile .profile-contact {
+    font-size: 11px;
+    line-height: 1.2;
+    min-height: 13px;
+    margin: 0 0 4px 0;
+    padding: 0;
+}
+
+.profile-grid-mobile .profile-description {
+    padding: 12px;
+    border-radius: 14px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.profile-grid-mobile .profile-meta span {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    line-height: 1.3;
+}
+
+.profile-grid-mobile .profile-meta strong {
+    color: #334155;
+    font-weight: 600;
+    display: inline;
+}
+
+.profile-grid-mobile .profile-status {
+    margin-top: 0;
+    margin-bottom: 0;
+    flex: 0 0 auto;
+    order: 2;
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+}
+
+.profile-grid-mobile .profile-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    order: 3;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(96,165,250,0.15);
+}
+
+.profile-grid-mobile .status-badge {
+    padding: 0 12px;
+    font-size: 11px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    line-height: 1;
+}
 .profile-card::before {
     content: '';
     position: absolute;
@@ -577,6 +745,20 @@ button, input, select, textarea { font: inherit; }
     .home-announcements .announcement-card { padding: 10px; border-radius: 8px; }
     .it-tracker-panel { padding: 18px; }
     .home-hero { padding: 16px; }
+}
+
+@media (max-width: 768px) {
+    .profile-grid-mobile .profile-card-track .profile-card {
+        flex-basis: calc((100% - 24px) / 3);
+        max-width: calc((100% - 24px) / 3);
+    }
+}
+
+@media (max-width: 520px) {
+    .profile-grid-mobile .profile-card-track .profile-card {
+        flex-basis: calc((100% - 24px) / 3);
+        max-width: calc((100% - 24px) / 3);
+    }
 }
 @media (max-width: 760px) { .home-hero { padding: 14px; } .home-hero .hero-copy h1 { font-size: 30px; } .home-footer { padding: 24px; } }
 

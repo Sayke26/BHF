@@ -32,6 +32,18 @@ let staffMarkers = {};
 let staffControl = null;
 let visibleBranchNames = [];
 
+window.addEventListener('resize', () => {
+    if (typeof renderITStaffProfileGrid === 'function') {
+        renderITStaffProfileGrid();
+    }
+});
+
+window.addEventListener('orientationchange', () => {
+    if (typeof renderITStaffProfileGrid === 'function') {
+        renderITStaffProfileGrid();
+    }
+});
+
 const FIREBASE_REMOTE_DOC = {
     collection: 'sharedState',
     doc: 'itStaffProfiles'
@@ -215,6 +227,10 @@ async function initializeRemoteSync() {
 
         const snapshot = await docRef.get();
         console.debug('[RemoteSync] initial doc get', { exists: snapshot.exists, id: FIREBASE_REMOTE_DOC.doc });
+        const localProfilesRaw = localStorage.getItem('itStaffProfiles');
+        let localProfiles = {};
+        try { localProfiles = JSON.parse(localProfilesRaw || '{}'); } catch (e) { localProfiles = {}; }
+
         if (snapshot.exists) {
             const remoteData = snapshot.data();
             console.debug('[RemoteSync] initial remoteData', remoteData);
@@ -224,6 +240,22 @@ async function initializeRemoteSync() {
                     syncLocalStaffProfiles(remoteData.profiles);
                 } finally {
                     remoteSyncApplying = false;
+                }
+            } else if (localProfiles && Object.keys(localProfiles).length > 0) {
+                try {
+                    await docRef.set({ profiles: localProfiles }, { merge: true });
+                    console.info('Migrated local itStaffProfiles → Firestore sharedState/itStaffProfiles');
+                } catch (e) {
+                    console.warn('Failed to migrate local itStaffProfiles to Firestore:', e);
+                }
+            }
+        } else {
+            if (localProfiles && Object.keys(localProfiles).length > 0) {
+                try {
+                    await docRef.set({ profiles: localProfiles }, { merge: true });
+                    console.info('Initialized Firestore sharedState/itStaffProfiles from local staff profiles');
+                } catch (e) {
+                    console.warn('Failed to initialize remote staff profiles:', e);
                 }
             }
         }
@@ -569,6 +601,9 @@ function syncLocalStaffProfiles(remoteProfiles) {
     updateBHFMapStaffMarkers();
     populateITTrackerControls();
     updateITTrackerFields();
+    if (typeof renderUserListsTable === 'function') {
+        renderUserListsTable();
+    }
     toastNotice('success', 'Live sync active', 'Staff and shift data were updated from shared state.');
 }
 
@@ -1885,13 +1920,33 @@ function readFileAsDataURL(file) {
     });
 }
 
+function moveProfileCarousel(direction) {
+    const grid = document.getElementById('profileGrid');
+    if (!grid || !grid.classList.contains('profile-grid-mobile')) return;
+
+    const track = grid.querySelector('.profile-card-track');
+    if (!track) return;
+
+    const cardWidth = track.querySelector('.profile-card')?.offsetWidth || 0;
+    const gap = 12;
+    const scrollAmount = (cardWidth + gap);
+    track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+}
+
 function renderITStaffProfileGrid() {
     const grid = document.getElementById('profileGrid');
     const countEl = document.getElementById('homeStaffCount');
     // Exclude disabled profiles from the home roster
     const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
     if (!grid) return;
-    grid.innerHTML = profiles.map((profile) => {
+
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const useMobileCarousel = isMobile;
+    const showCarouselControls = isMobile && profiles.length > 3;
+
+    grid.className = `profile-grid${isMobile ? ' profile-grid-mobile' : ''}`;
+
+    const cardHTML = profiles.map((profile) => {
         const contactLine = profile.email ? `${profile.phone} · ${profile.email}` : `${profile.phone}`;
         const locationText = profile.location ? profile.location : '-';
         const remarksText = profile.remarks ? profile.remarks : '-';
@@ -1918,7 +1973,6 @@ function renderITStaffProfileGrid() {
                         <div class="profile-contact">${contactLine}</div>
                     </div>
                 </div>
-                <div class="profile-description">${profile.role} supporting the BHF Group infrastructure track and response operations.</div>
                 <div class="profile-status"><span class="status-badge ${statusClass}">${statusText}</span></div>
                 <div class="profile-meta">
                     <span><strong>Location:</strong> <span id="${profile.id}Location">${locationText}</span></span>
@@ -1927,6 +1981,28 @@ function renderITStaffProfileGrid() {
             </div>
         `;
     }).join('');
+
+    if (useMobileCarousel) {
+        grid.innerHTML = `
+            ${showCarouselControls ? `
+                <div class="profile-carousel-controls">
+                    <button type="button" class="profile-carousel-btn" onclick="moveProfileCarousel(-1)" aria-label="Show previous IT profiles">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="profile-carousel-label">Swipe through the team</span>
+                    <button type="button" class="profile-carousel-btn" onclick="moveProfileCarousel(1)" aria-label="Show next IT profiles">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            ` : ''}
+            <div class="profile-card-track profile-card-track-carousel">
+                ${cardHTML}
+            </div>
+        `;
+    } else {
+        grid.innerHTML = cardHTML;
+    }
+
     if (countEl) {
         countEl.textContent = `${profiles.length} IT Specialists`;
     }
