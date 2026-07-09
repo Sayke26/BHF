@@ -162,10 +162,10 @@
                         <select id="homeBranchSelect" onchange="handleHomeBranchSelection(this.value)">
                             <option value="">Select branch to view...</option>
                         </select>
-                        <button id="homeBranchResetBtn" type="button" onclick="resetHomeBranchSelection()">Recenter</button>
+                        <button id="homeBranchResetBtn" type="button" onclick="resetHomeBranchSelection()">Re-center</button>
                     </div>
                 </div>
-            </div>s
+            </div>
 
             <div class="home-hero">
                 <div id="bhfMapContainer" class="hero-visual hero-map" style="position: relative; z-index: 10;">
@@ -1377,6 +1377,26 @@
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
                 <button type="button" class="btn-cancel" onclick="closeDeleteRoleModal()">Cancel</button>
                 <button type="button" class="delete-btn" onclick="deleteSelectedRole()" style="background: #dc2626; color: white;"><i class="fas fa-trash-alt"></i> Delete Role</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="staffRoleChangeModal" class="modal-overlay hidden" onclick="if (event.target === this) closeStaffRoleChangeModal()">
+        <div class="staff-profile-modal">
+            <button class="modal-close-button" onclick="closeStaffRoleChangeModal()" aria-label="Close role change modal"><i class="fas fa-times"></i></button>
+            <div style="margin-bottom: 20px;">
+                <h3 id="staffRoleChangeTitle">Change Staff Role</h3>
+                <p id="staffRoleChangeLabel" style="margin: 0; color: #64748b; font-size: 14px;">Choose the new role for the selected staff member.</p>
+            </div>
+            <div class="form-element">
+                <label for="staffRoleChangeSelect">Role</label>
+                <select id="staffRoleChangeSelect">
+                    <option value="">Select a role</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn-cancel" onclick="closeStaffRoleChangeModal()">Cancel</button>
+                <button type="button" class="add-btn" onclick="confirmStaffRoleChange()" style="background: #2563eb; color: white;"><i class="fas fa-check"></i> Save Role</button>
             </div>
         </div>
     </div>
