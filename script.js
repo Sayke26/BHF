@@ -74,6 +74,8 @@ let firestoreDb = null;
 let remoteSyncApplying = false;
 let remoteAnnouncementsApplying = false;
 let profileStorageSyncSuppressed = false;
+let profileSyncRevision = Number(localStorage.getItem('itStaffProfilesRevision') || '0');
+let profileSyncLastUpdatedBy = null;
 
 function isFirebaseConfigured() {
     return Boolean(window.firebaseConfig && window.firebaseConfig.projectId && window.firebaseConfig.apiKey);
@@ -211,14 +213,14 @@ async function initializeRemoteSync() {
             const remoteData = snapshot.data();
             if (!remoteData || typeof remoteData.profiles !== 'object') return;
 
-            // Only apply updates if the data is actually different from local memory
+            const remoteRevision = Number(remoteData.profilesRevision || 0);
             const currentLocal = localStorage.getItem("itStaffProfiles");
             const remoteString = JSON.stringify(remoteData.profiles);
 
             if (currentLocal !== remoteString) {
                 remoteSyncApplying = true;
                 try {
-                    syncLocalStaffProfiles(remoteData.profiles);
+                    syncLocalStaffProfiles(remoteData.profiles, { revision: remoteRevision, updatedBy: remoteData.profilesUpdatedBy || 'remote' });
                     
                     // Smoothly refresh the UI view structures
                     if (typeof updateITProfilesDisplay === 'function') updateITProfilesDisplay();
@@ -255,7 +257,10 @@ async function initializeRemoteSync() {
             if (remoteData && typeof remoteData.profiles === 'object') {
                 remoteSyncApplying = true;
                 try {
-                    syncLocalStaffProfiles(remoteData.profiles);
+                    syncLocalStaffProfiles(remoteData.profiles, {
+                        revision: Number(remoteData.profilesRevision || 0),
+                        updatedBy: remoteData.profilesUpdatedBy || 'remote'
+                    });
                 } finally {
                     remoteSyncApplying = false;
                 }
@@ -602,7 +607,50 @@ async function fetchAnnouncementsFromRemote() {
         updateRemoteSyncStatusDisplay('error', e.message || String(e));
     }
 }
-function syncLocalStaffProfiles(remoteProfiles) {
+function getProfileSyncRevision() {
+    const raw = localStorage.getItem('itStaffProfilesRevision');
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function bumpProfileSyncRevision(updatedBy = null) {
+    const revision = Date.now();
+    profileSyncRevision = revision;
+    profileSyncLastUpdatedBy = updatedBy || profileSyncLastUpdatedBy || 'local';
+    try {
+        localStorage.setItem('itStaffProfilesRevision', String(revision));
+    } catch (e) {
+        console.warn('Failed to persist profile sync revision', e);
+    }
+    return revision;
+}
+
+function shouldApplyRemoteProfiles(remoteData) {
+    const remoteRevision = Number(remoteData?.profilesRevision || 0);
+    const localRevision = getProfileSyncRevision();
+    const remoteUpdatedAt = remoteData?.profilesUpdatedAt ? Date.parse(remoteData.profilesUpdatedAt) : NaN;
+    const localUpdatedAt = Number(localStorage.getItem('itStaffProfilesRevision') || 0);
+
+    if (remoteRevision && localRevision > remoteRevision) {
+        console.debug('[RemoteSync] skipping stale profile snapshot', { remoteRevision, localRevision });
+        return false;
+    }
+
+    if (!remoteRevision && Number.isFinite(localRevision) && localRevision > 0) {
+        if (Number.isFinite(remoteUpdatedAt) && remoteUpdatedAt <= localUpdatedAt) {
+            console.debug('[RemoteSync] skipping remote snapshot with missing revision because local state is newer', { remoteUpdatedAt, localUpdatedAt });
+            return false;
+        }
+        if (!Number.isFinite(remoteUpdatedAt)) {
+            console.debug('[RemoteSync] skipping remote snapshot with no revision and no timestamp because local state exists', { localRevision });
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function syncLocalStaffProfiles(remoteProfiles, options = {}) {
     if (!remoteProfiles || typeof remoteProfiles !== 'object') {
         return;
     }
@@ -614,7 +662,11 @@ function syncLocalStaffProfiles(remoteProfiles) {
         return;
     }
 
-    persistStaffProfiles(remoteProfiles, { skipRemote: true });
+    if (!shouldApplyRemoteProfiles({ profilesRevision: options.revision || 0 })) {
+        return;
+    }
+
+    persistStaffProfiles(remoteProfiles, { skipRemote: true, force: true, revision: options.revision || bumpProfileSyncRevision(options.updatedBy || 'remote') });
     renderITStaffProfileGrid();
     updateBHFMapStaffMarkers();
     populateITTrackerControls();
@@ -625,17 +677,19 @@ function syncLocalStaffProfiles(remoteProfiles) {
     toastNotice('success', 'Live sync active', 'Staff and shift data were updated from shared state.');
 }
 
-async function syncProfilesToRemote(profiles) {
+async function syncProfilesToRemote(profiles, options = {}) {
     if (!firestoreDb || !profiles || typeof profiles !== 'object') {
         console.warn('[RemoteSync] syncProfilesToRemote skipped', { firestoreDbExists: !!firestoreDb, profilesType: typeof profiles });
         return;
     }
 
     try {
-        console.debug('[RemoteSync] syncProfilesToRemote()', profiles);
+        const revision = options.revision || bumpProfileSyncRevision(options.updatedBy || profileSyncLastUpdatedBy || 'local');
+        console.debug('[RemoteSync] syncProfilesToRemote()', { revision, profiles });
         const docRef = firestoreDb.collection(FIREBASE_REMOTE_DOC.collection).doc(FIREBASE_REMOTE_DOC.doc);
-        await docRef.set({ profiles }, { merge: true });
-        console.debug('[RemoteSync] syncProfilesToRemote complete');
+        // Overwrite the shared profiles map so deleted profile keys are removed from Firestore.
+        await docRef.set({ profiles, profilesRevision: revision, profilesUpdatedAt: new Date().toISOString(), profilesUpdatedBy: options.updatedBy || profileSyncLastUpdatedBy || 'local' }, { merge: false });
+        console.debug('[RemoteSync] syncProfilesToRemote complete', { revision });
     } catch (e) {
         console.error('Failed to sync profiles to remote:', e);
         updateRemoteSyncStatusDisplay('error', e.message || String(e));
@@ -1362,10 +1416,10 @@ function getStoredStaffProfiles() {
         try {
             const parsed = JSON.parse(raw);
             // Auto-repair: ensure all default profiles exist with correct structure
-            const repaired = autoRepairStoredProfiles(parsed);
-            if (repaired !== parsed) {
+            const repaired = normalizeStoredProfiles(parsed);
+            if (JSON.stringify(repaired) !== JSON.stringify(parsed)) {
                 localStorage.setItem('itStaffProfiles', JSON.stringify(repaired));
-                console.log('Auto-repaired stored profiles: restored missing default users.');
+                console.log('Auto-repaired stored profiles: restored missing default values.');
             }
             return repaired;
         } catch (e) {
@@ -1386,6 +1440,34 @@ function getStoredStaffProfiles() {
     });
     localStorage.setItem('itStaffProfiles', JSON.stringify(migrated));
     return migrated;
+}
+
+function normalizeStoredProfiles(storedProfiles) {
+    if (!storedProfiles || typeof storedProfiles !== 'object') return {};
+    const normalized = {};
+    Object.entries(storedProfiles).forEach(([key, profile]) => {
+        const safeProfile = profile && typeof profile === 'object' ? { ...profile } : {};
+        safeProfile.id = safeProfile.id || key;
+        normalized[key] = safeProfile;
+    });
+    assignMissingStaffIdNumbers(normalized);
+    return normalized;
+}
+
+function assignMissingStaffIdNumbers(profiles) {
+    const existingIds = Object.values(profiles)
+        .map(p => String(p.idNumber || '').trim())
+        .filter(Boolean)
+        .map(n => Number(n))
+        .filter(Number.isFinite);
+
+    let nextId = existingIds.length ? Math.max(...existingIds) + 1 : 1;
+    Object.entries(profiles).forEach(([key, profile]) => {
+        if (!profile.idNumber) {
+            profile.idNumber = String(nextId).padStart(3, '0');
+            nextId += 1;
+        }
+    });
 }
 
 function autoRepairStoredProfiles(storedProfiles) {
@@ -1418,23 +1500,25 @@ function persistStaffProfiles(profiles, options = {}) {
     const currentRaw = localStorage.getItem('itStaffProfiles');
     if (currentRaw === incomingRaw && !options.force) {
         if (!options.skipRemote && !remoteSyncApplying && isRemoteSyncActive()) {
-            syncProfilesToRemote(profiles);
+            syncProfilesToRemote(profiles, { revision: getProfileSyncRevision(), updatedBy: options.updatedBy || profileSyncLastUpdatedBy || 'local' });
         }
         return;
     }
 
+    const revision = options.revision ?? bumpProfileSyncRevision(options.updatedBy || profileSyncLastUpdatedBy || 'local');
     profileStorageSyncSuppressed = true;
     try {
         localStorage.setItem('itStaffProfiles', incomingRaw);
+        localStorage.setItem('itStaffProfilesRevision', String(revision));
     } finally {
         profileStorageSyncSuppressed = false;
     }
     try {
         if (bhfBroadcast) bhfBroadcast.postMessage({ type: 'profiles-updated', profiles });
     } catch (e) { /* ignore */ }
-    console.debug('[RemoteSync] persistStaffProfiles', { options, remoteSyncApplying, isRemoteSyncActive: isRemoteSyncActive() });
+    console.debug('[RemoteSync] persistStaffProfiles', { options, revision, remoteSyncApplying, isRemoteSyncActive: isRemoteSyncActive() });
     if (!options.skipRemote && !remoteSyncApplying && isRemoteSyncActive()) {
-        syncProfilesToRemote(profiles);
+        syncProfilesToRemote(profiles, { revision, updatedBy: options.updatedBy || profileSyncLastUpdatedBy || 'local' });
     } else {
         updateRemoteSyncStatusDisplay(isRemoteSyncActive() ? 'ok' : 'offline', isRemoteSyncActive() ? 'Synced' : 'Local only');
     }
@@ -1559,13 +1643,19 @@ function deleteSelectedRole() {
 function renderUserListsTable() {
     const tableBody = document.getElementById('userListsTableBody');
     if (!tableBody) return;
-    const profiles = Object.values(getStoredStaffProfiles())
+    const storedProfiles = getStoredStaffProfiles();
+    const profiles = Object.entries(storedProfiles)
+        .map(([key, profile]) => ({ key, profile }))
         .sort((a, b) => {
             const priority = {
                 'IT Manager': 1,
                 'IT Support Specialist': 2
             };
-            return (priority[a.role] || 999) - (priority[b.role] || 999);
+            const roleDiff = (priority[a.profile.role] || 999) - (priority[b.profile.role] || 999);
+            if (roleDiff !== 0) return roleDiff;
+            const aId = Number(a.profile.idNumber || a.key.replace(/[^0-9]/g, ''));
+            const bId = Number(b.profile.idNumber || b.key.replace(/[^0-9]/g, ''));
+            return Number.isFinite(aId) && Number.isFinite(bId) ? aId - bId : 0;
         });
     const currentProfile = getCurrentAdminProfile();
     const currentRole = currentProfile?.role || '';
@@ -1580,7 +1670,7 @@ function renderUserListsTable() {
         try {
             const headerName = document.getElementById('adminProfileName')?.textContent?.trim();
             if (headerName) {
-                const found = Object.entries(getStoredStaffProfiles()).find(([k, v]) => (v.name || '').trim() === headerName.trim());
+                const found = Object.entries(storedProfiles).find(([k, v]) => (v.name || '').trim() === headerName.trim());
                 if (found) {
                     effectiveKey = found[0];
                     effectiveRole = found[1].role || effectiveRole;
@@ -1590,42 +1680,42 @@ function renderUserListsTable() {
         } catch (e) { /* ignore fallback errors */ }
     }
 
-    tableBody.innerHTML = profiles.map(profile => {
-        const idNumber = profile.idNumber || profile.id.replace(/[^0-9]/g, '') || '---';
+    tableBody.innerHTML = profiles.map(({ key: profileKey, profile }) => {
+        const idNumber = profile.idNumber || profileKey.replace(/[^0-9]/g, '') || '---';
         const isDisabled = profile.disabled;
         const statusLabel = isDisabled ? 'Disabled' : 'Active';
-        const isSelf = effectiveKey === profile.id;
+        const isSelf = effectiveKey === profileKey;
         const canDisable = canDisableProfile(effectiveRole, profile.role) && !isDisabled && !isSelf;
         const canEnable = canEnableProfile(effectiveRole, profile.role) && isDisabled && !isSelf;
         const canDelete = canDeleteProfile(effectiveRole, profile.role) && !isSelf;
 
-        console.debug('renderUserListsTable: profile check', { profileId: profile.id, profileRole: profile.role, isDisabled, canDisable, canEnable, canDelete, effectiveKey, effectiveRole });
+        console.debug('renderUserListsTable: profile check', { profileKey, profileId: profile.id, profileRole: profile.role, isDisabled, canDisable, canEnable, canDelete, effectiveKey, effectiveRole });
 
         const actionButtons = [];
         const normalizedEffectiveRole = normalizeRole(effectiveRole);
         if (!isSelf) {
             if (normalizedEffectiveRole === 'it manager') {
                 if (!isDisabled) {
-                    actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" onclick="queueDisableStaff('${profile.id}')" ${canDisable ? '' : 'disabled'}>Disable</button>`);
-                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" onclick="deleteStaffProfile('${profile.id}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
+                    actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" data-action="disable" data-staff="${profileKey}" onclick="queueDisableStaff('${profileKey}')" ${canDisable ? '' : 'disabled'}>Disable</button>`);
+                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" data-action="delete" data-staff="${profileKey}" onclick="deleteStaffProfile('${profileKey}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
                 } else {
-                    actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" onclick="enableStaff('${profile.id}')" ${canEnable ? '' : 'disabled'}>Enable</button>`);
-                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" onclick="deleteStaffProfile('${profile.id}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
+                    actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" data-action="enable" data-staff="${profileKey}" onclick="enableStaff('${profileKey}')" ${canEnable ? '' : 'disabled'}>Enable</button>`);
+                    actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" data-action="delete" data-staff="${profileKey}" onclick="deleteStaffProfile('${profileKey}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
                 }
             } else {
                 if (!isDisabled) {
                     if (canDisable) {
-                        actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" onclick="queueDisableStaff('${profile.id}')">Disable</button>`);
+                        actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" data-action="disable" data-staff="${profileKey}">Disable</button>`);
                     }
                 } else {
                     if (canEnable) {
-                        actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" onclick="enableStaff('${profile.id}')">Enable</button>`);
+                        actionButtons.push(`<button type="button" class="add-btn" style="padding:5px 10px; font-size:12px;" data-action="enable" data-staff="${profileKey}">Enable</button>`);
                     }
                 }
             }
             if (normalizedEffectiveRole === 'it manager') {
-                actionButtons.push(`<button type="button" class="add-btn promote-btn" data-staff="${profile.id}" data-action="promote" style="padding:5px 10px; font-size:12px;">Promote</button>`);
-                actionButtons.push(`<button type="button" class="secondary-btn demote-btn" data-staff="${profile.id}" data-action="demote" style="padding:5px 10px; font-size:12px;">Demote</button>`);
+                actionButtons.push(`<button type="button" class="add-btn promote-btn" data-staff="${profileKey}" data-action="promote" style="padding:5px 10px; font-size:12px;">Promote</button>`);
+                actionButtons.push(`<button type="button" class="secondary-btn demote-btn" data-staff="${profileKey}" data-action="demote" style="padding:5px 10px; font-size:12px;">Demote</button>`);
             }
         }
 
@@ -1650,18 +1740,39 @@ function renderUserListsTable() {
     try {
         if (!tableBody._roleChangeDelegated) {
             tableBody.addEventListener('click', (e) => {
-                const promoteBtn = e.target.closest && e.target.closest('.promote-btn');
-                const demoteBtn = e.target.closest && e.target.closest('.demote-btn');
-                if (promoteBtn) {
-                    const staffId = promoteBtn.getAttribute('data-staff');
+                const btn = (e.target instanceof Element ? e.target : e.target.parentElement)?.closest('button');
+                if (!btn) return;
+                const action = btn.getAttribute('data-action');
+                const staffId = btn.getAttribute('data-staff');
+                if (!action || !staffId) return;
+
+                if (action === 'promote') {
                     console.log('[RoleChange] promote clicked', { staffId });
                     openStaffRoleChangeModal(staffId, 'promote');
                     return;
                 }
-                if (demoteBtn) {
-                    const staffId = demoteBtn.getAttribute('data-staff');
+                if (action === 'demote') {
                     console.log('[RoleChange] demote clicked', { staffId });
                     openStaffRoleChangeModal(staffId, 'demote');
+                    return;
+                }
+                if (action === 'delete') {
+                    if (!btn.disabled) {
+                        console.log('[UserList] delete clicked', { staffId, action, eventTarget: e.target });
+                        deleteStaffProfile(staffId);
+                    }
+                    return;
+                }
+                if (action === 'disable') {
+                    if (!btn.disabled) {
+                        queueDisableStaff(staffId);
+                    }
+                    return;
+                }
+                if (action === 'enable') {
+                    if (!btn.disabled) {
+                        enableStaff(staffId);
+                    }
                     return;
                 }
             });
@@ -1831,13 +1942,40 @@ function enableStaff(staffKey) {
 }
 
 function deleteStaffProfile(staffKey) {
-    if (!staffKey) return;
+    console.debug('[deleteStaffProfile] called', { staffKey });
+    if (!staffKey) {
+        console.warn('[deleteStaffProfile] no staffKey supplied');
+        return;
+    }
     const profiles = getStoredStaffProfiles();
-    const profile = profiles[staffKey];
-    if (!profile) return;
-    if (!confirm(`Delete ${profile.name} permanently? This cannot be undone.`)) return;
-    delete profiles[staffKey];
-    persistStaffProfiles(profiles);
+    let profile = profiles[staffKey];
+    let resolvedKey = staffKey;
+
+    if (!profile) {
+        // Support deletion by name or username when id is missing or invalid
+        const normalizedSearch = String(staffKey).trim().toLowerCase();
+        const found = Object.entries(profiles).find(([key, candidate]) => {
+            return (candidate.name || '').trim().toLowerCase() === normalizedSearch
+                || (candidate.username || '').trim().toLowerCase() === normalizedSearch
+                || key.trim().toLowerCase() === normalizedSearch;
+        });
+        if (found) {
+            resolvedKey = found[0];
+            profile = found[1];
+        }
+    }
+
+    if (!profile) {
+        console.warn('[deleteStaffProfile] profile not found for', staffKey);
+        return;
+    }
+    if (!confirm(`Delete ${profile.name} permanently? This cannot be undone.`)) {
+        console.log('[deleteStaffProfile] deletion cancelled by user', { staffKey, profileName: profile.name });
+        return;
+    }
+    delete profiles[resolvedKey];
+    persistStaffProfiles(profiles, { force: true, updatedBy: adminUserKey || 'local' });
+    console.log('[deleteStaffProfile] deleted profile', { resolvedKey, profileName: profile.name });
     renderUserListsTable();
     populateITTrackerControls();
     renderITStaffProfileGrid();
@@ -4931,9 +5069,12 @@ function exportElementToPdf(element, filename) {
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const margin = 8;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+
+    const elementWidth = element.scrollWidth || element.offsetWidth || 1400;
+    const elementHeight = element.scrollHeight || element.offsetHeight || 1400;
 
     return html2canvas(element, {
         scale: 2,
@@ -4941,25 +5082,30 @@ function exportElementToPdf(element, filename) {
         backgroundColor: '#ffffff',
         logging: false,
         allowTaint: true,
-        width: element.scrollWidth || element.offsetWidth || 1400,
-        windowWidth: element.scrollWidth || element.offsetWidth || 1400
+        width: elementWidth,
+        height: elementHeight,
+        windowWidth: elementWidth,
+        windowHeight: elementHeight,
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY
     }).then((canvas) => {
         const imageData = canvas.toDataURL('image/png');
-        const canvasRatio = canvas.width / canvas.height;
-        const maxWidth = pageWidth - (margin * 2);
-        const maxHeight = pageHeight - (margin * 2);
-        let scaledWidth = maxWidth;
-        let scaledHeight = scaledWidth / canvasRatio;
+        const imageProps = pdf.getImageProperties(imageData);
+        const pdfWidth = pageWidth - margin * 2;
+        const pdfHeight = (imageProps.height * pdfWidth) / imageProps.width;
+        let heightLeft = pdfHeight;
+        let position = margin;
 
-        if (scaledHeight > maxHeight) {
-            scaledHeight = maxHeight;
-            scaledWidth = scaledHeight * canvasRatio;
+        pdf.addImage(imageData, 'PNG', margin, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight - margin * 2;
+
+        while (heightLeft > 0) {
+            position -= pageHeight - margin * 2;
+            pdf.addPage();
+            pdf.addImage(imageData, 'PNG', margin, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight - margin * 2;
         }
 
-        const x = (pageWidth - scaledWidth) / 2;
-        const y = (pageHeight - scaledHeight) / 2;
-
-        pdf.addImage(imageData, 'PNG', x, y, scaledWidth, scaledHeight);
         pdf.save(filename);
     });
 }
@@ -5770,34 +5916,91 @@ function exportAnalysisSectionToPdf(canvasId, title) {
 }
 
 function exportAnalysisTableToPdf() {
-    const tablePanel = document.querySelector('#analysisPage .table-frame-panel');
-    if (!tablePanel) return;
+    const tableBody = document.getElementById('analysisSummaryTable');
+    if (!tableBody) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.style.width = '1800px';
-    wrapper.style.padding = '24px';
-    wrapper.style.background = '#ffffff';
-    wrapper.style.fontFamily = 'Arial, sans-serif';
-    wrapper.style.color = '#0f172a';
+    const headerCells = Array.from(document.querySelectorAll('#analysisPage .table-frame-panel thead th')).map(th => th.textContent.trim());
+    const rows = Array.from(tableBody.querySelectorAll('tr')).map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()));
+    if (!headerCells.length || !rows.length) return;
 
-    wrapper.innerHTML = `
-        <div style="font-size:22px; font-weight:700; color:#102d6d; margin-bottom:10px;">Branch Performance Summary</div>
-        <div style="font-size:12px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
-    `;
-    wrapper.appendChild(tablePanel.cloneNode(true));
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 14;
+    const lineHeight = 7;
+    const contentWidth = pageWidth - margin * 2;
+    let cursorY = margin;
 
-    document.body.appendChild(wrapper);
-    exportElementToPdf(wrapper, 'branch-performance-summary.pdf')
-        .catch(() => {
-            toastNotice('error', 'Export failed', 'Unable to export the performance summary.');
-        })
-        .finally(() => {
-            if (wrapper.parentNode) {
-                wrapper.parentNode.removeChild(wrapper);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(18);
+    pdf.text('Average Branch Performance', margin, cursorY);
+    cursorY += lineHeight + 4;
+
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, cursorY);
+    cursorY += lineHeight + 4;
+
+    const summaryKeys = ['analysisPerformanceScore', 'analysisTopBranch', 'analysisProblemCount', 'analysisBreakdowns', 'analysisWorstCategory'];
+    const summaryLabels = ['Average Performance', 'Top Branch', 'Issue Count', 'Breakdowns', 'Worst Category'];
+    const summaryValues = summaryKeys.map(key => document.getElementById(key)?.textContent.trim() || 'N/A');
+
+    summaryValues.forEach((value, index) => {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(11);
+        pdf.text(`${summaryLabels[index]}:`, margin, cursorY);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(value, margin + 45, cursorY);
+        cursorY += lineHeight;
+    });
+
+    cursorY += 4;
+    pdf.setDrawColor(220);
+    pdf.setLineWidth(0.2);
+    pdf.line(margin, cursorY, pageWidth - margin, cursorY);
+    cursorY += lineHeight;
+
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+
+    const columnCount = headerCells.length;
+    const columnWidth = contentWidth / columnCount;
+    const rowHeight = 8;
+
+    const drawRow = (cells, y, isHeader = false) => {
+        let x = margin;
+        cells.forEach((text, colIndex) => {
+            if (isHeader) {
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFillColor(245, 247, 250);
+                pdf.rect(x - 1, y - rowHeight + 2, columnWidth + 2, rowHeight, 'F');
             }
+            pdf.setDrawColor(200);
+            pdf.rect(x - 1, y - rowHeight + 2, columnWidth + 2, rowHeight, 'S');
+            pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
+            pdf.text(String(text), x + 1, y, { maxWidth: columnWidth - 2 });
+            x += columnWidth;
         });
-}
+    };
 
+    drawRow(headerCells, cursorY, true);
+    cursorY += rowHeight;
+
+    pdf.setFont('helvetica', 'normal');
+    rows.forEach((row) => {
+        if (cursorY + rowHeight > pageHeight - margin) {
+            pdf.addPage();
+            cursorY = margin;
+            drawRow(headerCells, cursorY, true);
+            cursorY += rowHeight;
+        }
+        drawRow(row, cursorY, false);
+        cursorY += rowHeight;
+    });
+
+    pdf.save('average-branch-performance.pdf');
+}
 function downloadInventoryFindings() {
     if (!window.html2canvas || !window.jspdf?.jsPDF) {
         alert('PDF export feature is not available right now. Please try again.');
