@@ -1174,18 +1174,41 @@
                 </div>
             </div>
             <div class="staff-profile-content">
-                <p id="staffProfileSummary" class="staff-profile-summary">No bio available yet. Update your About Me using the IT Tracker form.</p>
-                <div class="staff-contact-group">
-                    <div class="staff-contact-item"><i class="fas fa-phone"></i> <span id="staffProfilePhone">Phone not set</span></div>
-                    <div class="staff-contact-item"><i class="fas fa-envelope"></i> <span id="staffProfileEmail">Email not set</span></div>
-                    <div class="staff-contact-item"><i class="fas fa-map-marker-alt"></i> <span id="staffProfileLocation">Location not set</span></div>
+                <div class="staff-specialist-section">
+                    <div class="specialist-header">
+                        <h4><i class="fas fa-briefcase"></i> About This Specialist</h4>
+                    </div>
+                    <p id="staffProfileSummary" class="staff-profile-summary">No bio available yet. Update your About Me using the IT Tracker form.</p>
+                </div>
+                <div class="staff-contact-grid">
+                    <div class="contact-card">
+                        <div class="contact-icon"><i class="fas fa-phone"></i></div>
+                        <div class="contact-details">
+                            <span class="contact-label">Phone</span>
+                            <span id="staffProfilePhone" class="contact-value">Phone not set</span>
+                        </div>
+                    </div>
+                    <div class="contact-card">
+                        <div class="contact-icon"><i class="fas fa-envelope"></i></div>
+                        <div class="contact-details">
+                            <span class="contact-label">Email</span>
+                            <span id="staffProfileEmail" class="contact-value">Email not set</span>
+                        </div>
+                    </div>
+                    <div class="contact-card">
+                        <div class="contact-icon"><i class="fas fa-map-marker-alt"></i></div>
+                        <div class="contact-details">
+                            <span class="contact-label">Location</span>
+                            <span id="staffProfileLocation" class="contact-value">Location not set</span>
+                        </div>
+                    </div>
                 </div>
                 <div id="staffProfileLinks" class="staff-link-list"></div>
                 <div class="staff-modal-actions">
-                    <a id="staffEmailLink" href="#" class="staff-email-button hidden" onclick="handleStaffEmailClick(event)"><i class="fas fa-envelope"></i> Email me</a>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <button type="button" class="add-btn" onclick="openStaffFeedbackForm()" style="background: #2563eb; color: white; display: flex; align-items: center; gap: 8px;"><i class="fas fa-comment-dots"></i> Add Feedback</button>
-                        <button id="staffAdminLoginBtn" type="button" class="secondary-btn" onclick="(function(){ window.pendingAdminAction = 'showSummary'; document.getElementById('pinModalOverlay').classList.remove('hidden'); const userField = document.getElementById('adminUsernameField'); const passField = document.getElementById('adminPasswordField'); if (userField) { userField.value = ''; userField.focus(); } if (passField) passField.value = ''; })()" style="display: flex; align-items: center; gap:8px; white-space:nowrap;"><i class="fas fa-user-lock"></i> Admin Login</button>
+                    <a id="staffEmailLink" href="#" class="staff-email-button hidden" onclick="handleStaffEmailClick(event)"><i class="fas fa-envelope"></i> Email Specialist</a>
+                    <div class="staff-action-buttons">
+                        <button type="button" class="add-btn" onclick="openStaffFeedbackForm()"><i class="fas fa-comment-dots"></i> Send Feedback</button>
+                        <button id="staffAdminLoginBtn" type="button" class="secondary-btn" onclick="(function(){ window.pendingAdminAction = 'showSummary'; document.getElementById('pinModalOverlay').classList.remove('hidden'); const userField = document.getElementById('adminUsernameField'); const passField = document.getElementById('adminPasswordField'); if (userField) { userField.value = ''; userField.focus(); } if (passField) passField.value = ''; })()"><i class="fas fa-user-lock"></i> Admin Access</button>
                     </div>
                 </div>
             </div>

@@ -2200,11 +2200,9 @@ function populateITTrackerControls() {
             if (currentUser === 'ali') {
                 const optionHtml = profiles.map(profile => {
                     const status = profile.shiftStatus || (profile.location ? 'live' : 'offline');
-                    const isActive = status === 'live' || status === 'standby';
                     const isCurrent = profile.id === currentUser;
-                    const disabledAttr = (!isActive && !isCurrent) ? 'disabled' : '';
-                    const labelSuffix = isCurrent ? ' (you)' : (!isActive ? ' (inactive)' : (status === 'standby' ? ' (standby)' : ''));
-                    return `<option value="${profile.id}" ${disabledAttr}>${profile.name}${labelSuffix}</option>`;
+                    const labelSuffix = isCurrent ? ' (you)' : (status === 'standby' ? ' (standby)' : (status === 'offline' ? ' (inactive)' : ''));
+                    return `<option value="${profile.id}">${profile.name}${labelSuffix}</option>`;
                 }).join('');
                 staffSelect.innerHTML = '<option value="">-- Choose staff --</option>' + optionHtml;
                 staffSelect.disabled = false;
