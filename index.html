@@ -37,11 +37,11 @@
     <header class="main-header">
         <div class="logo-container">
             <div class="logo-icon">
-                <img src="/images/BHFlogo.jpg" alt="BHF Logo" style="width: 100%; height: auto;">
+                <img id="headerLogoImage" src="/images/BHFlogo.jpg" alt="BHF Logo" style="width: 100%; height: auto;">
             </div>
             <div>
-                <h1>BHF GROUP</h1>
-                <p>IT Infrastructure Performance Portal</p>
+                <h1 id="headerTitleText" class="home-editable" data-home-edit-field="headerTitle" contenteditable="false">BHF GROUP</h1>
+                <p id="headerSubtitleText" class="home-editable" data-home-edit-field="headerSubtitle" contenteditable="false">IT Infrastructure Performance Portal</p>
             </div>
         </div>
         <div id="sideMenuToggle" aria-label="Open menu" title="Menu" role="button" onclick="toggleSideMenu()">
@@ -85,8 +85,27 @@
         <button id="configNavBtnSide" class="side-nav-btn" onclick="promptAdminAccess(); closeSideMenu();"><i class="fas fa-cog"></i> Computer Monitoring</button>
         <button id="userListsNavBtnSide" class="side-nav-btn" onclick="showUserListsPage(); closeSideMenu();"><i class="fas fa-users"></i> User Lists</button>
         <button id="inventoryReportNavBtnSide" class="side-nav-btn" onclick="showInventoryReportPage(); closeSideMenu();"><i class="fas fa-boxes"></i> Inventory Report</button>
-        <button id="logoutBtnSide" class="side-nav-btn" style="background:#dc2626; color:white; border-color:#dc2626;" onclick="logoutAdmin(); closeSideMenu();"><i class="fas fa-sign-out-alt"></i> Log-out</button>
+        <button id="editHomeBtnSide" class="side-nav-btn" style="background:#2563eb; color:white; border-color:#2563eb;" onclick="enterHomeEditMode(); closeSideMenu();"><i class="fas fa-edit"></i> Edit Home</button>
     </nav>
+
+    <div id="homeEditPanel" class="home-edit-panel hidden" aria-live="polite">
+        <div class="home-edit-panel__header">
+            <div>
+                <h3>Edit mode</h3>
+                <p>Click any text on the page and start typing. Press Done when you are finished.</p>
+            </div>
+            <div class="home-edit-panel__actions">
+                <button type="button" class="btn-secondary" onclick="resetHomeEditContent()">Reset</button>
+                <button type="button" class="add-btn" onclick="exitHomeEditMode()">Done</button>
+            </div>
+        </div>
+        <div class="home-edit-panel__logo-actions">
+            <button type="button" class="btn-secondary" onclick="document.getElementById('headerLogoFile').click()">Change header logo</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('footerLogoFile').click()">Change footer logo</button>
+        </div>
+        <input id="headerLogoFile" type="file" accept="image/*" class="hidden-file-input" onchange="handleLogoFileChange(event, 'headerLogo')">
+        <input id="footerLogoFile" type="file" accept="image/*" class="hidden-file-input" onchange="handleLogoFileChange(event, 'footerLogo')">
+    </div>
 
     <main class="content-bound">
 
@@ -1138,24 +1157,24 @@
     <div id="systemNoticeContainer" class="system-notice-container"></div>
     <footer class="home-footer">
         <div class="footer-brand">
-            <div class="footer-brand__icon"><img src="/images/BHFlogo.jpg" alt="BHF logo" class="footer-logo"></div>
+            <div class="footer-brand__icon"><img id="footerLogoImage" src="/images/BHFlogo.jpg" alt="BHF logo" class="footer-logo"></div>
             <div>
-                <h3>BHF Infrastructure Hub</h3>
-                <p>Reliable support, branch visibility, and rapid operational oversight in one place.</p>
+                <h3 id="footerTitleText" class="home-editable" data-home-edit-field="footerTitle" contenteditable="false">BHF Infrastructure Hub</h3>
+                <p id="footerDescriptionText" class="home-editable" data-home-edit-field="footerText" contenteditable="false">Reliable support, branch visibility, and rapid operational oversight in one place.</p>
             </div>
         </div>
         <div class="footer-links">
             <div>
-                <h4>Support</h4>
-                <a href="#">Ticket Portal</a>
-                <a href="#">IT Tracker</a>
-                <a href="#">Branch Monitoring</a>
+                <h4 id="footerSupportHeading" class="home-editable" data-home-edit-field="footerSupportHeading" contenteditable="false">Support</h4>
+                <a href="#" data-prevent-link="true"><span id="footerSupportItem1" class="home-editable editable-text" data-home-edit-field="footerSupportItems.0" contenteditable="false">Ticket Portal</span></a>
+                <a href="#" data-prevent-link="true"><span id="footerSupportItem2" class="home-editable editable-text" data-home-edit-field="footerSupportItems.1" contenteditable="false">IT Tracker</span></a>
+                <a href="#" data-prevent-link="true"><span id="footerSupportItem3" class="home-editable editable-text" data-home-edit-field="footerSupportItems.2" contenteditable="false">Branch Monitoring</span></a>
             </div>
             <div>
-                <h4>Contact</h4>
-                <a href="#"><i class="fas fa-envelope"></i> support@bhfgroup.com</a>
-                <a href="#"><i class="fas fa-phone-alt"></i> +63 2 8888 1111</a>
-                <a href="#"><i class="fas fa-map-marker-alt"></i> Bonifacio Global City</a>
+                <h4 id="footerContactHeading" class="home-editable" data-home-edit-field="footerContactHeading" contenteditable="false">Contact</h4>
+                <a href="#" data-prevent-link="true"><i class="fas fa-envelope" contenteditable="false"></i> <span id="footerContactItem1" class="home-editable editable-text" data-home-edit-field="footerContactItems.0" contenteditable="false">support@bhfgroup.com</span></a>
+                <a href="#" data-prevent-link="true"><i class="fas fa-phone-alt" contenteditable="false"></i> <span id="footerContactItem2" class="home-editable editable-text" data-home-edit-field="footerContactItems.1" contenteditable="false">+63 2 8888 1111</span></a>
+                <a href="#" data-prevent-link="true"><i class="fas fa-map-marker-alt" contenteditable="false"></i> <span id="footerContactItem3" class="home-editable editable-text" data-home-edit-field="footerContactItems.2" contenteditable="false">Bonifacio Global City</span></a>
             </div>
         </div>
     </footer>

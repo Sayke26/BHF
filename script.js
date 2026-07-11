@@ -31,6 +31,260 @@ let branchMarkers = {};
 let staffMarkers = {};
 let staffControl = null;
 let visibleBranchNames = [];
+let homeEditModeActive = false;
+let homeEditContentState = null;
+const HOME_EDIT_STORAGE_KEY = 'bhfHomeEditContent';
+const DEFAULT_HOME_EDIT_CONTENT = {
+    headerTitle: 'BHF GROUP',
+    headerSubtitle: 'IT Infrastructure Performance Portal',
+    headerLogo: '/images/BHFlogo.jpg',
+    footerTitle: 'BHF Infrastructure Hub',
+    footerText: 'Reliable support, branch visibility, and rapid operational oversight in one place.',
+    footerLogo: '/images/BHFlogo.jpg',
+    footerSupportHeading: 'Support',
+    footerSupportItems: ['Ticket Portal', 'IT Tracker', 'Branch Monitoring'],
+    footerContactHeading: 'Contact',
+    footerContactItems: ['support@bhfgroup.com', '+63 2 8888 1111', 'Bonifacio Global City']
+};
+
+function getStoredHomeEditContent() {
+    try {
+        const raw = localStorage.getItem(HOME_EDIT_STORAGE_KEY);
+        if (!raw) return { ...DEFAULT_HOME_EDIT_CONTENT };
+        const parsed = JSON.parse(raw);
+        return { ...DEFAULT_HOME_EDIT_CONTENT, ...parsed };
+    } catch (e) {
+        return { ...DEFAULT_HOME_EDIT_CONTENT };
+    }
+}
+
+function persistHomeEditContent(content) {
+    try {
+        localStorage.setItem(HOME_EDIT_STORAGE_KEY, JSON.stringify(content));
+    } catch (e) {
+        console.warn('Could not save home edit content', e);
+    }
+}
+
+function applyHomeEditContent(content) {
+    const resolved = { ...DEFAULT_HOME_EDIT_CONTENT, ...content };
+    homeEditContentState = resolved;
+
+    const headerTitle = document.getElementById('headerTitleText');
+    const headerSubtitle = document.getElementById('headerSubtitleText');
+    const headerLogo = document.getElementById('headerLogoImage');
+    const footerTitle = document.getElementById('footerTitleText');
+    const footerDescription = document.getElementById('footerDescriptionText');
+    const footerLogo = document.getElementById('footerLogoImage');
+    const footerSupportHeading = document.getElementById('footerSupportHeading');
+    const footerSupportItems = [
+        document.getElementById('footerSupportItem1'),
+        document.getElementById('footerSupportItem2'),
+        document.getElementById('footerSupportItem3')
+    ];
+    const footerContactHeading = document.getElementById('footerContactHeading');
+    const footerContactItems = [
+        document.getElementById('footerContactItem1'),
+        document.getElementById('footerContactItem2'),
+        document.getElementById('footerContactItem3')
+    ];
+
+    if (headerTitle) headerTitle.textContent = resolved.headerTitle;
+    if (headerSubtitle) headerSubtitle.textContent = resolved.headerSubtitle;
+    if (headerLogo) {
+        headerLogo.src = resolved.headerLogo || DEFAULT_HOME_EDIT_CONTENT.headerLogo;
+        headerLogo.alt = `${resolved.headerTitle} Logo`;
+    }
+    if (footerTitle) footerTitle.textContent = resolved.footerTitle;
+    if (footerDescription) footerDescription.textContent = resolved.footerText;
+    if (footerLogo) {
+        footerLogo.src = resolved.footerLogo || DEFAULT_HOME_EDIT_CONTENT.footerLogo;
+        footerLogo.alt = `${resolved.footerTitle} Logo`;
+    }
+    if (footerSupportHeading) footerSupportHeading.textContent = resolved.footerSupportHeading;
+    footerSupportItems.forEach((itemEl, index) => {
+        if (itemEl) {
+            const value = Array.isArray(resolved.footerSupportItems) ? resolved.footerSupportItems[index] : '';
+            itemEl.textContent = value || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems[index] || '';
+        }
+    });
+    if (footerContactHeading) footerContactHeading.textContent = resolved.footerContactHeading;
+    footerContactItems.forEach((itemEl, index) => {
+        if (itemEl) {
+            const value = Array.isArray(resolved.footerContactItems) ? resolved.footerContactItems[index] : '';
+            itemEl.innerHTML = value ? `<i class="fas ${index === 0 ? 'fa-envelope' : index === 1 ? 'fa-phone-alt' : 'fa-map-marker-alt'}" contenteditable="false"></i> ${value}` : '';
+        }
+    });
+
+    persistHomeEditContent(resolved);
+}
+
+function setHomeEditableElementsEnabled(enabled) {
+    document.body.classList.toggle('home-edit-mode', enabled);
+    document.querySelectorAll('.home-editable').forEach(element => {
+        if (!element) return;
+        element.setAttribute('contenteditable', enabled ? 'true' : 'false');
+        element.classList.toggle('editing', enabled);
+        element.setAttribute('spellcheck', 'false');
+    });
+    document.querySelectorAll('a[data-prevent-link="true"]').forEach(anchor => {
+        if (enabled) {
+            anchor.addEventListener('click', preventEditLinkNavigation);
+        } else {
+            anchor.removeEventListener('click', preventEditLinkNavigation);
+        }
+    });
+}
+
+function preventEditLinkNavigation(event) {
+    if (homeEditModeActive) {
+        event.preventDefault();
+    }
+}
+
+function updateHomeEditValue(field, value) {
+    const nextContent = { ...(homeEditContentState || getStoredHomeEditContent()) };
+    const cleanValue = String(value || '').replace(/\u00A0/g, ' ');
+
+    switch (field) {
+        case 'headerTitle':
+            nextContent.headerTitle = cleanValue || DEFAULT_HOME_EDIT_CONTENT.headerTitle;
+            break;
+        case 'headerSubtitle':
+            nextContent.headerSubtitle = cleanValue || DEFAULT_HOME_EDIT_CONTENT.headerSubtitle;
+            break;
+        case 'footerTitle':
+            nextContent.footerTitle = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerTitle;
+            break;
+        case 'footerText':
+            nextContent.footerText = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerText;
+            break;
+        case 'footerSupportHeading':
+            nextContent.footerSupportHeading = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerSupportHeading;
+            break;
+        case 'footerSupportItems.0':
+            nextContent.footerSupportItems = [...(nextContent.footerSupportItems || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems)];
+            nextContent.footerSupportItems[0] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems[0];
+            break;
+        case 'footerSupportItems.1':
+            nextContent.footerSupportItems = [...(nextContent.footerSupportItems || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems)];
+            nextContent.footerSupportItems[1] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems[1];
+            break;
+        case 'footerSupportItems.2':
+            nextContent.footerSupportItems = [...(nextContent.footerSupportItems || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems)];
+            nextContent.footerSupportItems[2] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerSupportItems[2];
+            break;
+        case 'footerContactHeading':
+            nextContent.footerContactHeading = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerContactHeading;
+            break;
+        case 'footerContactItems.0':
+            nextContent.footerContactItems = [...(nextContent.footerContactItems || DEFAULT_HOME_EDIT_CONTENT.footerContactItems)];
+            nextContent.footerContactItems[0] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerContactItems[0];
+            break;
+        case 'footerContactItems.1':
+            nextContent.footerContactItems = [...(nextContent.footerContactItems || DEFAULT_HOME_EDIT_CONTENT.footerContactItems)];
+            nextContent.footerContactItems[1] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerContactItems[1];
+            break;
+        case 'footerContactItems.2':
+            nextContent.footerContactItems = [...(nextContent.footerContactItems || DEFAULT_HOME_EDIT_CONTENT.footerContactItems)];
+            nextContent.footerContactItems[2] = cleanValue || DEFAULT_HOME_EDIT_CONTENT.footerContactItems[2];
+            break;
+    }
+
+    homeEditContentState = nextContent;
+}
+
+function bindHomeInlineEditing() {
+    document.querySelectorAll('.home-editable').forEach(element => {
+        element.removeEventListener('input', handleHomeEditableInput);
+        element.removeEventListener('blur', handleHomeEditableBlur);
+    });
+
+    document.querySelectorAll('.home-editable').forEach(element => {
+        element.addEventListener('input', handleHomeEditableInput);
+        element.addEventListener('blur', handleHomeEditableBlur);
+    });
+}
+
+function handleHomeEditableInput(event) {
+    const target = event.currentTarget;
+    if (target && target.dataset.homeEditField) {
+        updateHomeEditValue(target.dataset.homeEditField, target.textContent);
+    }
+}
+
+function handleHomeEditableBlur(event) {
+    const target = event.currentTarget;
+    if (target && target.dataset.homeEditField) {
+        updateHomeEditValue(target.dataset.homeEditField, target.textContent);
+        if (homeEditContentState) {
+            persistHomeEditContent(homeEditContentState);
+        }
+    }
+}
+
+function saveHomeEditContent() {
+    if (homeEditContentState) {
+        persistHomeEditContent(homeEditContentState);
+    }
+}
+
+function resetHomeEditContent() {
+    const resetContent = { ...DEFAULT_HOME_EDIT_CONTENT };
+    applyHomeEditContent(resetContent);
+}
+
+function handleLogoFileChange(event, field) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const content = getStoredHomeEditContent();
+        const nextContent = { ...content, [field]: reader.result };
+        applyHomeEditContent(nextContent);
+    };
+    reader.readAsDataURL(file);
+}
+
+function enterHomeEditMode() {
+    homeEditModeActive = true;
+    closeSideMenu();
+    hideAllPages();
+    const target = document.getElementById('homePage');
+    if (target) {
+        target.classList.remove('hidden');
+        target.classList.add('active');
+    }
+    const panel = document.getElementById('homeEditPanel');
+    if (panel) panel.classList.remove('hidden');
+    const content = getStoredHomeEditContent();
+    applyHomeEditContent(content);
+    setHomeEditableElementsEnabled(true);
+    bindHomeInlineEditing();
+    renderBranchGridDashboard();
+    loadHomeRemarks();
+    try { displayAnnouncementsOnHome(); } catch (e) {}
+    updateITProfilesDisplay();
+    if (!bhfMap) {
+        initializeBHFMap();
+    } else {
+        updateBHFMapStaffMarkers();
+        setTimeout(() => { if (bhfMap) bhfMap.invalidateSize(); }, 200);
+    }
+    populateHomeBranchSelect();
+    renderHomeBranchList();
+    filterHomeBranches(document.getElementById('branchSearchInput')?.value || '');
+    try { updateNavVisibility(); updateHamburgerVisibility(); } catch (e) { console.error(e); }
+}
+
+function exitHomeEditMode() {
+    homeEditModeActive = false;
+    saveHomeEditContent();
+    setHomeEditableElementsEnabled(false);
+    const panel = document.getElementById('homeEditPanel');
+    if (panel) panel.classList.add('hidden');
+    goHome();
+}
 
 window.addEventListener('resize', () => {
     if (typeof renderITStaffProfileGrid === 'function') {
@@ -2535,6 +2789,13 @@ window.addEventListener('load', () => {
 });
 
 window.addEventListener('load', () => {
+    homeEditContentState = getStoredHomeEditContent();
+    applyHomeEditContent(homeEditContentState);
+    setHomeEditableElementsEnabled(false);
+    bindHomeInlineEditing();
+});
+
+window.addEventListener('load', () => {
     try { displayAnnouncementsOnHome(); } catch (e) {}
     try { renderITStaffProfileGrid(); } catch (e) {}
 });
@@ -2859,8 +3120,9 @@ function updateHamburgerVisibility() {
         const active = document.querySelector('.page.active');
         const isHome = active && active.id === 'homePage';
         const isSideOpen = document.body.classList.contains('side-open');
-        // Hide only on Home page; always show otherwise (including when side is open)
-        if (isHome && !isSideOpen) {
+        const keepVisibleForEdit = homeEditModeActive;
+        // Hide only on Home page unless we're in edit mode.
+        if (isHome && !isSideOpen && !keepVisibleForEdit) {
             menuToggle.style.display = 'none';
         } else {
             menuToggle.style.display = '';
