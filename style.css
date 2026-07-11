@@ -219,6 +219,108 @@ button, input, select, textarea { font: inherit; }
     transform: translateX(280px);
 }
 
+.home-edit-panel {
+    margin: 24px 24px 0;
+    padding: 20px 22px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+    border: 1px solid rgba(37, 99, 235, 0.16);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+.home-edit-panel.hidden { display: none; }
+.home-edit-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+.home-edit-panel__header h3 { margin: 0 0 4px; color: #0f172a; }
+.home-edit-panel__header p { margin: 0; color: #475569; font-size: 14px; }
+.home-edit-panel__close {
+    border: none;
+    background: #eff6ff;
+    color: #2563eb;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.home-edit-panel__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+.field-group input,
+.field-group textarea {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: #ffffff;
+    color: #0f172a;
+}
+.field-group input[type="file"] {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.home-edit-panel__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+.home-edit-panel__logo-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+.hidden-file-input {
+    display: none;
+}
+.home-edit-mode .home-editable {
+    cursor: text;
+    user-select: text;
+}
+.home-edit-mode .home-editable:hover {
+    background: rgba(255, 255, 255, 0.85);
+}
+.home-editable {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+}
+.home-editable[contenteditable="true"] {
+    outline: 3px dashed rgba(252, 211, 77, 0.9);
+    outline-offset: 4px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.96);
+    padding: 4px 8px;
+    min-height: 1.5em;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+    color: #0f172a;
+    caret-color: #102d6d;
+}
+.home-editable[contenteditable="true"]::selection {
+    background: rgba(37, 99, 235, 0.4);
+}
+.btn-secondary {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
 @media (max-width: 900px) {
     #sideMenuToggle { left: 12px; top: 12px; }
     .side-menu { left: 0; top: 0; }
@@ -226,6 +328,10 @@ button, input, select, textarea { font: inherit; }
 
 @media (max-width: 600px) {
     #sideMenuToggle { width: 44px; height: 44px; top: 10px; left: 10px; }
+    .home-edit-panel { margin: 16px 14px 0; padding: 16px; }
+    .home-edit-panel__grid { grid-template-columns: 1fr; }
+    .home-edit-panel__actions { flex-direction: column-reverse; }
+    .home-edit-panel__actions button { width: 100%; }
     .side-menu {
         left: 0;
         right: 0;
