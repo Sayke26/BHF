@@ -33,6 +33,7 @@ let staffControl = null;
 let visibleBranchNames = [];
 let homeEditModeActive = false;
 let homeEditContentState = null;
+let homeEditRemoteApplying = false;
 const HOME_EDIT_STORAGE_KEY = 'bhfHomeEditContent';
 const DEFAULT_HOME_EDIT_CONTENT = {
     headerTitle: 'BHF GROUP',
@@ -61,6 +62,15 @@ function getStoredHomeEditContent() {
 function persistHomeEditContent(content) {
     try {
         localStorage.setItem(HOME_EDIT_STORAGE_KEY, JSON.stringify(content));
+        // If Firestore is initialized, push the home edit content to the sharedState/homeEditContent
+        try {
+            if (!homeEditRemoteApplying && firestoreDb && typeof firestoreDb.collection === 'function') {
+                const docRef = firestoreDb.collection('sharedState').doc('homeEditContent');
+                docRef.set({ homeEdit: content, homeEditUpdatedAt: Date.now() }, { merge: true }).catch(err => {
+                    console.warn('Failed to push home edit content to Firestore', err);
+                });
+            }
+        } catch (e) { /* ignore */ }
     } catch (e) {
         console.warn('Could not save home edit content', e);
     }
@@ -670,6 +680,23 @@ async function initializeRemoteSync() {
                 }
             }, (err) => console.error('Announcements sync error', err));
         } catch (e) { console.warn('Announcements listener not attached', e); }
+
+        // Listen for home edit content updates so clients reflect shared edits
+        try {
+            const homeEditRef = firestoreDb.collection('sharedState').doc('homeEditContent');
+            homeEditRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !data.homeEdit) return;
+                homeEditRemoteApplying = true;
+                try {
+                    applyHomeEditContent(data.homeEdit || {});
+                } finally {
+                    // Small delay to ensure local persistence completes before re-enabling pushes
+                    setTimeout(() => { homeEditRemoteApplying = false; }, 150);
+                }
+            }, (err) => console.error('Home edit sync error', err));
+        } catch (e) { console.warn('Home edit listener not attached', e); }
         // ------------------------------------------------------------------
         // NEW: Real-Time Sync Streams for All User Dashboard Windows (pcData)
         // ------------------------------------------------------------------
