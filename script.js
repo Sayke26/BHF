@@ -5348,52 +5348,207 @@ function closeStaffFeedbackCompareResultOverlay() {
     document.body.classList.remove('no-scroll');
 }
 
-function exportElementToPdf(element, filename) {
+function exportElementToPdf(element, filename, pdfOptions = {}) {
     if (!element || !window.html2canvas || !window.jspdf?.jsPDF) {
         alert('PDF export is not available right now. Please try again.');
         return Promise.reject(new Error('PDF export unavailable'));
     }
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pdf = new jsPDF({ orientation: pdfOptions.orientation || 'p', unit: 'mm', format: pdfOptions.format || 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const margin = 10;
 
-    const elementWidth = element.scrollWidth || element.offsetWidth || 1400;
-    const elementHeight = element.scrollHeight || element.offsetHeight || 1400;
+    const hideSelectors = Array.isArray(pdfOptions.hideSelectors) ? pdfOptions.hideSelectors : [];
+    const wasHidden = element.classList.contains('hidden');
+    const modifiedStyles = [];
 
-    return html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        allowTaint: true,
-        width: elementWidth,
-        height: elementHeight,
-        windowWidth: elementWidth,
-        windowHeight: elementHeight,
-        scrollX: -window.scrollX,
-        scrollY: -window.scrollY
+    const setTempStyle = (el, styles) => {
+        const original = {};
+        Object.keys(styles).forEach((prop) => {
+            original[prop] = el.style[prop] || '';
+            el.style[prop] = styles[prop];
+        });
+        modifiedStyles.push({ el, original });
+    };
+
+    if (wasHidden) {
+        element.classList.remove('hidden');
+    }
+
+    if (hideSelectors.length > 0) {
+        const hiddenControls = Array.from(element.querySelectorAll(hideSelectors.join(',')));
+        hiddenControls.forEach(control => {
+            setTempStyle(control, { visibility: 'hidden', display: 'none' });
+        });
+    }
+
+    setTempStyle(element, {
+        display: 'block',
+        visibility: 'visible',
+        opacity: '1',
+        position: 'relative',
+        left: '0',
+        top: '0',
+        zIndex: '999999',
+        width: '100%',
+        height: 'auto',
+        maxWidth: '100%',
+        overflow: 'visible'
+    });
+
+    Array.from(element.querySelectorAll('*')).forEach((child) => {
+        setTempStyle(child, {
+            overflow: 'visible',
+            maxHeight: 'none',
+            height: 'auto',
+            minHeight: '0'
+        });
+    });
+
+    const resizeCharts = () => {
+        Array.from(element.querySelectorAll('canvas')).forEach((canvas) => {
+            if (!canvas) return;
+            const chart = window.Chart && window.Chart.getChart ? window.Chart.getChart(canvas) : null;
+            const rect = canvas.getBoundingClientRect();
+            const naturalWidth = Math.max(rect.width || canvas.clientWidth || 600, 700);
+            const naturalHeight = Math.max(rect.height || canvas.clientHeight || 320, 320);
+            canvas.style.width = `${naturalWidth}px`;
+            canvas.style.height = `${naturalHeight}px`;
+            canvas.width = naturalWidth * 2;
+            canvas.height = naturalHeight * 2;
+            if (chart) {
+                chart.resize();
+            }
+        });
+    };
+
+    const ensureRendered = () => new Promise((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                resizeCharts();
+                window.dispatchEvent(new Event('resize'));
+                setTimeout(() => {
+                    resizeCharts();
+                    resolve();
+                }, 250);
+            });
+        });
+    });
+
+    return ensureRendered().then(() => {
+        const elementWidth = Math.max(element.scrollWidth || element.offsetWidth || 1400, 1200);
+        const elementHeight = Math.max(element.scrollHeight || element.offsetHeight || 1400, 1400);
+
+        return html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            allowTaint: true,
+            width: elementWidth,
+            height: elementHeight,
+            windowWidth: Math.max(elementWidth, window.innerWidth || 1400),
+            windowHeight: Math.max(elementHeight, window.innerHeight || 1400),
+            scrollX: -window.scrollX,
+            scrollY: -window.scrollY
+        });
     }).then((canvas) => {
         const imageData = canvas.toDataURL('image/png');
         const imageProps = pdf.getImageProperties(imageData);
         const pdfWidth = pageWidth - margin * 2;
-        const pdfHeight = (imageProps.height * pdfWidth) / imageProps.width;
-        let heightLeft = pdfHeight;
-        let position = margin;
+        const pageHeightAvailable = pageHeight - margin * 2;
+        const scale = pdfWidth / imageProps.width;
+        const pageHeightPx = Math.floor(pageHeightAvailable / scale);
+        const pageBreakGapPx = Math.max(12, Math.round(5 / scale));
+        const minRowPageHeightPx = Math.max(80, Math.round(pageHeightPx * 0.12));
 
-        pdf.addImage(imageData, 'PNG', margin, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight - margin * 2;
+        const elementScrollHeight = element.scrollHeight || element.offsetHeight || canvas.height;
+        const canvasScale = canvas.height / elementScrollHeight;
+        const elementRect = element.getBoundingClientRect();
+        const rows = Array.from(element.querySelectorAll('tr')).map(row => {
+            const rowRect = row.getBoundingClientRect();
+            const top = Math.round((rowRect.top - elementRect.top) * canvasScale);
+            const bottom = Math.round((rowRect.bottom - elementRect.top) * canvasScale);
+            return {
+                top: Math.max(0, Math.min(canvas.height, top)),
+                bottom: Math.max(0, Math.min(canvas.height, bottom)),
+                height: Math.max(1, Math.round((bottom - top)))
+            };
+        }).filter(row => row.bottom > 0 && row.top < canvas.height).sort((a, b) => a.top - b.top);
 
-        while (heightLeft > 0) {
-            position -= pageHeight - margin * 2;
-            pdf.addPage();
-            pdf.addImage(imageData, 'PNG', margin, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight - margin * 2;
+        let currentY = 0;
+        let pageIndex = 0;
+
+        while (currentY < canvas.height) {
+            const remainingHeight = canvas.height - currentY;
+            let sliceHeight = Math.min(pageHeightPx, remainingHeight);
+
+            if (remainingHeight > pageHeightPx) {
+                const maxBottom = currentY + pageHeightPx - pageBreakGapPx;
+                const pageCandidate = rows.filter(row => row.bottom <= maxBottom && row.bottom > currentY).pop();
+
+                if (pageCandidate) {
+                    sliceHeight = pageCandidate.bottom - currentY;
+                } else {
+                    const nextRow = rows.find(row => row.top > currentY);
+                    if (nextRow && nextRow.top > currentY && nextRow.top < currentY + pageHeightPx) {
+                        sliceHeight = Math.min(nextRow.top - currentY, pageHeightPx - pageBreakGapPx);
+                    } else {
+                        sliceHeight = pageHeightPx - pageBreakGapPx;
+                    }
+                }
+
+                if (sliceHeight < minRowPageHeightPx) {
+                    sliceHeight = Math.min(pageHeightPx - pageBreakGapPx, remainingHeight);
+                }
+            }
+
+            if (currentY + sliceHeight > canvas.height) {
+                sliceHeight = remainingHeight;
+            }
+
+            const sliceEnd = currentY + sliceHeight;
+            const intersecting = rows.find(row => row.top < sliceEnd && row.bottom > sliceEnd);
+            if (intersecting && intersecting.top > currentY) {
+                const safeHeight = intersecting.top - currentY;
+                if (safeHeight >= minRowPageHeightPx) {
+                    sliceHeight = safeHeight;
+                }
+            }
+
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sliceHeight;
+            const pageCtx = pageCanvas.getContext('2d');
+            pageCtx.drawImage(canvas, 0, currentY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+            const pageData = pageCanvas.toDataURL('image/png');
+            const pageDisplayHeight = sliceHeight * scale;
+
+            if (pageIndex > 0) {
+                pdf.addPage();
+            }
+            pdf.addImage(pageData, 'PNG', margin, margin, pdfWidth, pageDisplayHeight);
+
+            currentY += sliceHeight;
+            if (canvas.height - currentY < 20 && canvas.height - currentY > 0) {
+                currentY = canvas.height;
+            }
+            pageIndex += 1;
         }
 
         pdf.save(filename);
+    }).finally(() => {
+        modifiedStyles.reverse().forEach(({ el, original }) => {
+            Object.keys(original).forEach(prop => {
+                el.style[prop] = original[prop] || '';
+            });
+        });
+        if (wasHidden) {
+            element.classList.add('hidden');
+        }
     });
 }
 
@@ -5972,95 +6127,37 @@ function downloadAnalysisCompareResultChart() {
         return;
     }
 
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'absolute';
-    wrapper.style.left = '0';
-    wrapper.style.top = '0';
-    wrapper.style.width = '1600px';
-    wrapper.style.backgroundColor = '#ffffff';
-    wrapper.style.padding = '24px';
-    wrapper.style.boxSizing = 'border-box';
-    wrapper.style.fontFamily = 'Arial, sans-serif';
-    wrapper.style.fontSize = '12px';
-    wrapper.style.lineHeight = '1.4';
-    wrapper.style.color = '#0f172a';
+    modal.classList.remove('hidden');
+    card.style.maxHeight = 'none';
+    card.style.overflow = 'visible';
 
-    const header = document.createElement('div');
-    header.style.marginBottom = '20px';
-    header.innerHTML = `
-        <div style="font-size: 20px; font-weight: bold; color: #102d6d; margin-bottom: 6px;">Branch Comparison Report</div>
-        <div style="font-size: 11px; color: #64748b;">Generated: ${new Date().toLocaleString()}</div>
-    `;
-    wrapper.appendChild(header);
-
-    const cardClone = card.cloneNode(true);
-    cardClone.style.maxHeight = 'none';
-    cardClone.style.overflow = 'visible';
-    wrapper.appendChild(cardClone);
-    document.body.appendChild(wrapper);
-
-    exportElementToPdf(wrapper, 'branch-comparison.pdf')
+    exportElementToPdf(card, 'branch-comparison.pdf', {
+        hideSelectors: ['.btn-cancel', '.modal-close-button', '.delete-btn']
+    })
         .then(() => {
             toastNotice('success', 'Download complete', 'Branch comparison report exported successfully.');
         })
         .catch(() => {
             toastNotice('error', 'Export failed', 'Unable to export the comparison report.');
             console.warn('Failed to export analysis comparison as PDF.');
-        })
-        .finally(() => {
-            if (wrapper.parentNode) {
-                document.body.removeChild(wrapper);
-            }
         });
 }
 
 function downloadAnalysisPagePdf() {
-    const analysisSection = document.querySelector('#analysisPage .section-title-bar');
-    const metricsSection = document.querySelector('#analysisPage .metrics-card-grid');
-    const chartSections = Array.from(document.querySelectorAll('#analysisPage .chart-box'));
-    const tablePanel = document.querySelector('#analysisPage .table-frame-panel');
-
-    if (!analysisSection || !metricsSection) {
+    const analysisPage = document.getElementById('analysisPage');
+    if (!analysisPage) {
         toastNotice('error', 'Export failed', 'Analysis content is not available for export.');
         return;
     }
 
-    const wrapper = document.createElement('div');
-    wrapper.style.width = '1800px';
-    wrapper.style.padding = '24px';
-    wrapper.style.background = '#ffffff';
-    wrapper.style.fontFamily = 'Arial, sans-serif';
-    wrapper.style.color = '#0f172a';
-
-    const title = document.createElement('div');
-    title.innerHTML = `
-        <div style="font-size:24px; font-weight:700; color:#102d6d; margin-bottom:6px;">BHF Analysis Report</div>
-        <div style="font-size:12px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
-    `;
-    wrapper.appendChild(title);
-    wrapper.appendChild(metricsSection.cloneNode(true));
-
-    chartSections.forEach(section => {
-        wrapper.appendChild(section.cloneNode(true));
-    });
-
-    if (tablePanel) {
-        wrapper.appendChild(tablePanel.cloneNode(true));
-    }
-
-    document.body.appendChild(wrapper);
-
-    exportElementToPdf(wrapper, 'analysis-report.pdf')
+    exportElementToPdf(analysisPage, 'analysis-report.pdf', {
+        hideSelectors: ['.btn-cancel', '.modal-close-button', '.delete-btn', '.close-inventory-btn']
+    })
         .then(() => {
             toastNotice('success', 'Export complete', 'Analysis report exported as PDF.');
         })
         .catch(() => {
             toastNotice('error', 'Export failed', 'Unable to generate the analysis PDF.');
-        })
-        .finally(() => {
-            if (wrapper.parentNode) {
-                wrapper.parentNode.removeChild(wrapper);
-            }
         });
 }
 
@@ -6156,137 +6253,28 @@ function exportAnalysisSectionToPdf(canvasId, title) {
     if (!canvas) return;
 
     const chartBox = canvas.closest('.chart-box');
-    const wrapper = document.createElement('div');
-    wrapper.style.width = '1600px';
-    wrapper.style.padding = '24px';
-    wrapper.style.background = '#ffffff';
-    wrapper.style.fontFamily = 'Arial, sans-serif';
-    wrapper.style.color = '#0f172a';
+    const exportTarget = chartBox || canvas;
 
-    const label = document.createElement('div');
-    label.innerHTML = `
-        <div style="font-size:20px; font-weight:700; color:#102d6d; margin-bottom:6px;">${title}</div>
-        <div style="font-size:11px; color:#64748b; margin-bottom:16px;">Generated: ${new Date().toLocaleString()}</div>
-    `;
-    wrapper.appendChild(label);
-
-    if (chartBox) {
-        const chartBoxClone = chartBox.cloneNode(true);
-        chartBoxClone.style.width = '100%';
-        chartBoxClone.style.margin = '0';
-        chartBoxClone.style.overflow = 'visible';
-        
-        const clonedCanvas = chartBoxClone.querySelector('canvas');
-        if (clonedCanvas && canvas) {
-            clonedCanvas.style.width = canvas.offsetWidth + 'px';
-            clonedCanvas.style.height = canvas.offsetHeight + 'px';
-        }
-        
-        wrapper.appendChild(chartBoxClone);
-    } else {
-        wrapper.appendChild(canvas.cloneNode(true));
-    }
-
-    document.body.appendChild(wrapper);
-    
-    setTimeout(() => {
-        exportElementToPdf(wrapper, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
-            .catch(() => {
-                toastNotice('error', 'Export failed', 'Unable to export the selected chart.');
-            })
-            .finally(() => {
-                if (wrapper.parentNode) {
-                    wrapper.parentNode.removeChild(wrapper);
-                }
-            });
-    }, 100);
+    exportElementToPdf(exportTarget, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
+        .then(() => {
+            toastNotice('success', 'Export complete', `${title} exported as PDF.`);
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the selected chart.');
+        });
 }
 
 function exportAnalysisTableToPdf() {
-    const tableBody = document.getElementById('analysisSummaryTable');
-    if (!tableBody) return;
+    const panel = document.querySelector('#analysisPage .table-frame-panel');
+    if (!panel) return;
 
-    const headerCells = Array.from(document.querySelectorAll('#analysisPage .table-frame-panel thead th')).map(th => th.textContent.trim());
-    const rows = Array.from(tableBody.querySelectorAll('tr')).map(tr => Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()));
-    if (!headerCells.length || !rows.length) return;
-
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 14;
-    const lineHeight = 7;
-    const contentWidth = pageWidth - margin * 2;
-    let cursorY = margin;
-
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(18);
-    pdf.text('Average Branch Performance', margin, cursorY);
-    cursorY += lineHeight + 4;
-
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, cursorY);
-    cursorY += lineHeight + 4;
-
-    const summaryKeys = ['analysisPerformanceScore', 'analysisTopBranch', 'analysisProblemCount', 'analysisBreakdowns', 'analysisWorstCategory'];
-    const summaryLabels = ['Average Performance', 'Top Branch', 'Issue Count', 'Breakdowns', 'Worst Category'];
-    const summaryValues = summaryKeys.map(key => document.getElementById(key)?.textContent.trim() || 'N/A');
-
-    summaryValues.forEach((value, index) => {
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(11);
-        pdf.text(`${summaryLabels[index]}:`, margin, cursorY);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(value, margin + 45, cursorY);
-        cursorY += lineHeight;
-    });
-
-    cursorY += 4;
-    pdf.setDrawColor(220);
-    pdf.setLineWidth(0.2);
-    pdf.line(margin, cursorY, pageWidth - margin, cursorY);
-    cursorY += lineHeight;
-
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'bold');
-
-    const columnCount = headerCells.length;
-    const columnWidth = contentWidth / columnCount;
-    const rowHeight = 8;
-
-    const drawRow = (cells, y, isHeader = false) => {
-        let x = margin;
-        cells.forEach((text, colIndex) => {
-            if (isHeader) {
-                pdf.setFont('helvetica', 'bold');
-                pdf.setFillColor(245, 247, 250);
-                pdf.rect(x - 1, y - rowHeight + 2, columnWidth + 2, rowHeight, 'F');
-            }
-            pdf.setDrawColor(200);
-            pdf.rect(x - 1, y - rowHeight + 2, columnWidth + 2, rowHeight, 'S');
-            pdf.setFont('helvetica', isHeader ? 'bold' : 'normal');
-            pdf.text(String(text), x + 1, y, { maxWidth: columnWidth - 2 });
-            x += columnWidth;
+    exportElementToPdf(panel, 'average-branch-performance.pdf')
+        .then(() => {
+            toastNotice('success', 'Export complete', 'Branch performance table exported as PDF.');
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the performance table.');
         });
-    };
-
-    drawRow(headerCells, cursorY, true);
-    cursorY += rowHeight;
-
-    pdf.setFont('helvetica', 'normal');
-    rows.forEach((row) => {
-        if (cursorY + rowHeight > pageHeight - margin) {
-            pdf.addPage();
-            cursorY = margin;
-            drawRow(headerCells, cursorY, true);
-            cursorY += rowHeight;
-        }
-        drawRow(row, cursorY, false);
-        cursorY += rowHeight;
-    });
-
-    pdf.save('average-branch-performance.pdf');
 }
 function downloadInventoryFindings() {
     if (!window.html2canvas || !window.jspdf?.jsPDF) {
@@ -7013,58 +7001,17 @@ function downloadCurrentMetricSummary() {
     const modal = document.querySelector('.metric-summary-modal');
     if (!modal) return;
 
-    const wrapper = document.createElement('div');
-    wrapper.style.width = '1400px';
-    wrapper.style.padding = '24px';
-    wrapper.style.background = '#ffffff';
-    wrapper.style.fontFamily = 'Arial, sans-serif';
-    wrapper.style.color = '#0f172a';
-
-    const header = document.createElement('div');
-    header.innerHTML = `
-        <div style="font-size:20px; font-weight:700; color:#102d6d; margin-bottom:6px;">${title}</div>
-        <div style="font-size:11px; color:#64748b; margin-bottom:20px;">Generated: ${new Date().toLocaleString()}</div>
-    `;
-    wrapper.appendChild(header);
-
-    const modalClone = modal.cloneNode(true);
-    const closeButton = modalClone.querySelector('.delete-btn');
-    if (closeButton) closeButton.remove();
-    const downloadButton = modalClone.querySelector('.add-btn');
-    if (downloadButton) downloadButton.remove();
-    
-    const headerSection = modalClone.querySelector('.summary-panel-header');
-    if (headerSection) {
-        headerSection.style.borderBottom = '1px solid #e2e8f0';
-        headerSection.style.paddingBottom = '16px';
-        headerSection.style.marginBottom = '16px';
-    }
-
-    const content = modalClone.querySelector('.summary-panel-content');
-    if (content) {
-        content.style.width = '100%';
-    }
-
-    const allElements = modalClone.querySelectorAll('*');
-    allElements.forEach(el => {
-        if (el.style.maxHeight) el.style.maxHeight = 'none';
-        if (el.style.overflow) el.style.overflow = 'visible';
-    });
-
-    wrapper.appendChild(modalClone);
-    document.body.appendChild(wrapper);
-
-    setTimeout(() => {
-        exportElementToPdf(wrapper, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
-            .catch(() => {
-                toastNotice('error', 'Export failed', 'Unable to export the metric summary.');
-            })
-            .finally(() => {
-                if (wrapper.parentNode) {
-                    wrapper.parentNode.removeChild(wrapper);
-                }
-            });
-    }, 100);
+    exportElementToPdf(modal, `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`, {
+        orientation: 'p',
+        format: 'a4',
+        hideSelectors: ['.delete-btn', '.btn-cancel', '.modal-close-button']
+    })
+        .then(() => {
+            toastNotice('success', 'Download complete', `${title} exported as PDF.`);
+        })
+        .catch(() => {
+            toastNotice('error', 'Export failed', 'Unable to export the metric summary.');
+        });
 }
 
 function closeInventoryFindings() {
