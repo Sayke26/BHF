@@ -3802,21 +3802,22 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 900px) {
     /* Constrain common modal/dialog containers to viewport and allow scroll */
     .modal, .modal-card, .advanced-modal, .metric-summary-modal, .confirm-modal-card, .metric-summary-modal, .summary-panel, .popup-card {
-        position: fixed !important;
-        left: 50% !important;
-        top: 48px !important;
-        transform: translateX(-50%) !important;
-        width: calc(100% - 32px) !important;
-        max-width: 720px !important;
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        width: min(100%, 520px) !important;
+        max-width: 520px !important;
         padding: 14px !important;
-        border-radius: 12px !important;
-        max-height: calc(100vh - 96px) !important;
+        border-radius: 14px !important;
+        max-height: calc(100vh - 120px) !important;
         overflow-y: auto !important;
         box-sizing: border-box !important;
+        margin: 0 auto !important;
     }
 
     /* Metric summary specific tweaks */
-    .metric-summary-modal { left: 50% !important; top: 40px !important; width: calc(100% - 24px) !important; padding: 12px !important; }
+    .metric-summary-modal { left: auto !important; top: auto !important; width: min(100%, 520px) !important; padding: 12px !important; margin: 0 auto !important; }
     .metric-summary-modal .summary-panel-content { padding: 12px !important; }
 
     /* Advanced / confirm modals */
@@ -3858,11 +3859,13 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 420px) {
     /* Extra-small phones: tighter fit */
     .modal, .metric-summary-modal, .advanced-modal, .confirm-modal-card {
-        width: calc(100% - 20px) !important;
+        width: min(100%, 520px) !important;
+        max-width: 520px !important;
         padding: 10px !important;
         border-radius: 10px !important;
-        top: 32px !important;
+        top: auto !important;
         max-height: calc(100vh - 72px) !important;
+        margin: 0 auto !important;
     }
     .profile-dropdown { right: 8px !important; max-width: calc(100% - 16px); }
 }
@@ -3956,181 +3959,6 @@ body.no-scroll { overflow: hidden; }
     }
 }
 
-/* --- Mobile Layout Overrides (max-width: 900px) ---
-     Purpose: Provide a professional, mobile-first layout that mirrors
-     desktop structure but optimized for small screens. Desktop rules
-     remain untouched; these overrides only apply for narrow viewports. */
-@media (max-width: 900px) {
-    /* Page framing */
-    html, body { height: 100%; }
-    .content-bound { width: 100% !important; max-width: 100% !important; padding: 12px !important; margin: 0 auto !important; }
-    /* Reserve space for the fixed header so content doesn't sit beneath it */
-    main.content-bound, .content-bound { padding-top: 72px !important; }
-
-    /* Header: compact and fixed at top */
-    .main-header { position: fixed !important; top: 0; left: 0; right: 0; height: 56px !important; display:flex; align-items:center; padding: 0 12px !important; z-index: 2200; }
-    .main-header .header-left, .main-header .header-right { align-items:center; display:flex; gap:8px; }
-    .main-header .logo { height:36px; width:auto; }
-    .main-header + main { margin-top: 56px !important; }
-
-    /* Side menu becomes an off-canvas drawer that overlays content */
-    #sideMenu { position: fixed !important; top: 56px; left: 0; height: calc(100vh - 56px); width: 280px; transform: translateX(-100%); transition: transform .22s ease; z-index: 1300; }
-    body.side-open #sideMenu { transform: translateX(0); }
-    body.side-open .content-bound, body.side-open .main-header { transform: none !important; width: 100% !important; }
-
-    /* Stack layout: single column flow for grids and cards */
-    .metrics-card-grid, .announcement-summary-grid, .dashboard-split-matrix, .structural-five-column, .structural-three-column, .compare-targets-grid {
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-    }
-
-    /* Cards become full width with reduced padding */
-    .metric-card, .broadcast-announcement-box, .branch-summary-group, .action-summary-container, .table-frame-panel {
-        padding: 14px !important;
-        border-radius: 12px !important;
-    }
-
-    /* Toolbar / action buttons: larger touch targets */
-    .add-btn, .edit-btn, .delete-btn, .btn-cancel, .btn-confirm { padding: 12px 14px !important; font-size: 15px !important; border-radius: 10px !important; }
-
-    /* Forms: full width inputs */
-    .form-element input, .form-element select, .form-element textarea { width: 100% !important; box-sizing: border-box; }
-
-    /* Tables: ensure they fit and are scrollable inside cards/modals */
-    .table-container { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
-    .user-list-table { min-width: 600px; } /* allow horizontal scroll for wide tables */
-
-    /* Make modals take nearly full width with small margins */
-    /* Place modal overlays below the header and avoid overlap */
-    .modal-overlay { align-items: flex-start !important; padding: 12px !important; padding-top: 84px !important; }
-    .modal-overlay > * {
-        margin: 8px auto !important;
-        width: calc(100% - 24px) !important;
-        max-width: 720px !important;
-        border-radius: 12px !important;
-        box-shadow: 0 18px 40px rgba(2,6,23,0.18) !important;
-        overflow: hidden !important;
-    }
-
-    /* Specific modal content tweaks */
-    .metric-summary-modal, .staff-profile-modal, .pc-editor-modal, .advanced-modal, .compare-modal-card {
-        width: calc(100% - 24px) !important;
-        padding: 12px !important;
-        max-height: 92vh !important;
-        overflow: hidden !important;
-        display: flex !important;
-        flex-direction: column !important;
-    }
-    .metric-summary-modal .summary-panel-content, .advanced-modal .summary-panel-content {
-        max-height: calc(92vh - 120px) !important;
-        overflow-y: auto !important;
-        padding: 8px !important;
-    }
-
-    /* Compact readability: slightly larger base font for small screens */
-    body { font-size: 15px !important; }
-    h3, h4 { font-size: 16px !important; }
-
-    /* Footer spacing */
-    .home-footer { padding: 18px 12px !important; }
-
-    /* Reduce heavy shadows for mobile for better contrast */
-    .broadcast-announcement-box, .branch-summary-group, .metric-card { box-shadow: 0 8px 20px rgba(2,6,23,0.06) !important; }
-}
-
-/* Extra-tight mobile rules for very small devices */
-@media (max-width: 420px) {
-    .content-bound { padding: 8px !important; }
-    .modal-overlay > * { width: calc(100% - 16px) !important; max-width: 380px !important; }
-    body { font-size: 14px !important; }
-    .add-btn, .edit-btn, .delete-btn { padding: 10px 12px !important; font-size: 14px !important; }
-}
-
-/* Final comprehensive mobile layout rebuild (overrides earlier mobile tweaks)
-     Targets devices <=900px and tighter rules for <=420px. Designed to
-     preserve desktop rules while delivering a professional, non-overlapping
-     mobile UX with full-width cards and modal behavior suitable for phones. */
-@media (max-width: 900px) {
-    html, body { height: 100%; -webkit-text-size-adjust: 100%; }
-    body { overflow-x: hidden !important; font-size: 15px !important; }
-
-    /* Fixed header with reserved top-space for content */
-    .main-header { position: fixed !important; top: 0; left: 0; right: 0; height: auto !important; display:flex; align-items:flex-start; padding: 0 12px !important; z-index: 4000 !important; background: var(--surface) !important; box-shadow: 0 2px 8px rgba(2,6,23,0.06) !important; }
-    .content-bound { max-width: 720px !important; margin: 0 auto !important; padding: 108px 12px 20px !important; }
-
-     /* Header layout: compact mobile header same across pages */
-     .main-header { position: fixed !important; top: 0; left: 0; right: 0; z-index: 5000 !important; padding: 8px 12px !important; box-shadow: 0 2px 10px rgba(2,6,23,0.18) !important; display: grid !important; grid-template-columns: 52px 1fr auto !important; align-items: center !important; height: auto !important; min-height: 96px !important; }
-     /* Hamburger top-left */
-     #sideMenuToggle { position: relative !important; left: auto !important; top: auto !important; width: 44px !important; height: 44px !important; margin: 0 !important; align-self: start !important; margin-top: 2px !important; }
-     .main-header .logo-container { grid-column: 2 / 3 !important; justify-self: center !important; align-self: center !important; margin: 0 !important; display: flex !important; justify-content: center !important; align-items: center !important; gap: 10px !important; width: auto !important; }
-     .logo-container h1 { font-size: 16px !important; margin: 0 !important; }
-     .logo-container p, #headerSubtitleText { display: none !important; }
-     .nav-links { grid-column: 3 / 4 !important; width: auto !important; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; justify-content: flex-end !important; align-items: center !important; gap: 8px !important; margin: 0 !important; padding: 0 !important; overflow-x: hidden !important; }
-     .nav-links button { min-width: 0 !important; padding: 8px 10px !important; font-size: 13px !important; border-radius: 10px !important; white-space: nowrap !important; max-width: 140px !important; overflow: hidden !important; text-overflow: ellipsis !important; }
-     .profile-menu-wrapper { grid-column: 3 / 4 !important; justify-self: end !important; align-self: center !important; position: relative !important; right: auto !important; top: auto !important; }
-     .profile-menu-btn { padding: 6px 10px !important; gap: 6px !important; border-radius: 12px !important; }
-     .profile-menu-avatar { width: 34px !important; height: 34px !important; }
-     .profile-dropdown { right: 12px !important; left: auto !important; top: calc(100% + 6px) !important; width: 220px !important; }
-
-     /* Make the admin action button smaller and header-friendly */
-     .nav-links .admin-nav-btn { background: var(--bhf-yellow) !important; color: var(--bhf-slate) !important; font-weight: 800 !important; padding: 8px 10px !important; }
-
-    /* Off-canvas side menu that overlays (doesn't push content) */
-    #sideMenu { position: fixed !important; top: 96px !important; left: 0 !important; height: calc(100vh - 96px) !important; width: 280px !important; transform: translateX(-100%) !important; transition: transform .22s ease !important; z-index: 3800 !important; }
-    body.side-open #sideMenu { transform: translateX(0) !important; }
-    /* Dim background when menu open */
-    body.side-open::after { content: '' !important; position: fixed !important; inset: 96px 0 0 0 !important; background: rgba(0,0,0,0.28) !important; z-index: 3700 !important; }
-
-    /* Collapse all complex grids into single column flow */
-    .metrics-card-grid, .announcement-summary-grid, .dashboard-split-matrix, .structural-five-column, .structural-three-column, .compare-targets-grid {
-        grid-template-columns: 1fr !important;
-        grid-auto-rows: auto !important;
-        gap: 12px !important;
-    }
-
-    /* Cards and panels: full width, gentler shadows */
-    .metric-card, .broadcast-announcement-box, .branch-summary-group, .action-summary-container, .table-frame-panel {
-        width: 100% !important; padding: 14px !important; border-radius: 12px !important; box-shadow: 0 8px 20px rgba(2,6,23,0.06) !important; }
-
-    /* Forms and actions: full width inputs and larger touch targets */
-    .form-element input, .form-element select, .form-element textarea { width: 100% !important; box-sizing: border-box !important; }
-    .add-btn, .edit-btn, .delete-btn, .btn-cancel, .btn-confirm { padding: 12px 14px !important; font-size: 15px !important; border-radius: 10px !important; }
-
-    /* Modal overlays: full-height fixed panels below the header */
-    .modal-overlay { align-items: flex-start !important; padding: 0 !important; background: rgba(0,0,0,0.36) !important; z-index: 3600 !important; }
-    .modal-overlay > * {
-        position: fixed !important; top: 76px !important; left: 10px !important; right: 10px !important; bottom: 14px !important; width: auto !important; max-width: none !important; margin: 0 !important; border-radius: 12px !important; overflow: auto !important; box-shadow: 0 20px 46px rgba(2,6,23,0.18) !important; background: #fff !important;
-    }
-    /* Close button above content */
-    .modal-overlay .modal-close-button { z-index: 3801 !important; }
-
-    /* Specific modal content sizes */
-    .metric-summary-modal, .staff-profile-modal, .pc-editor-modal, .advanced-modal, .compare-modal-card { width: auto !important; max-width: none !important; padding: 12px !important; border-radius: 12px !important; }
-    .metric-summary-modal .summary-panel-content, .advanced-modal .summary-panel-content { max-height: calc(100vh - 164px) !important; overflow-y: auto !important; padding: 10px !important; }
-
-    /* Tables: keep native layout but allow scrolling container */
-    .table-container { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; width: 100% !important; }
-    .user-list-table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
-    .user-list-table th, .user-list-table td { white-space: nowrap !important; }
-
-    /* Ensure sticky headers inside modals sit above table content */
-    .metric-summary-modal .summary-panel-header, .metric-summary-modal .summary-panel-actions { position: sticky !important; top: 0 !important; z-index: 3802 !important; }
-
-    /* Reduce margin/buffer for image-heavy elements */
-    .home-hero, .hero-visual { padding: 10px !important; }
-
-    /* Prevent transforms on content when side menu opens */
-    body.side-open .content-bound, body.side-open .main-header { transform: none !important; }
-}
-
-@media (max-width: 420px) {
-    .main-header { height: 56px !important; }
-    .content-bound { padding: 72px 8px 12px !important; }
-    .modal-overlay > * { top: 68px !important; left: 6px !important; right: 6px !important; bottom: 10px !important; border-radius: 10px !important; }
-    .metric-card, .branch-summary-group { padding: 12px !important; }
-    .user-list-table td, .user-list-table th { padding: 8px 6px !important; font-size: 13px !important; }
-    body { font-size: 14px !important; }
-}
 
 /* Ensure tables inside analysis modals are visible and scrollable on mobile */
 @media (max-width: 900px) {
@@ -4179,16 +4007,17 @@ body.no-scroll { overflow: hidden; }
 @media (max-width: 900px) {
     /* Override specific modal classes often used with inline widths */
     .staff-profile-modal, .pc-editor-modal, .compare-modal-card, .compare-modal-section, .compare-modal-footer, .compare-modal-card, .staff-profile-modal, .pin-modal-card, .modal-panel {
-        width: calc(100% - 28px) !important;
+        width: min(100%, 520px) !important;
         max-width: 520px !important;
         padding: 12px !important;
         border-radius: 14px !important;
-        top: 36px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
         box-sizing: border-box !important;
         overflow-y: auto !important;
         max-height: calc(100vh - 80px) !important;
+        margin: 0 auto !important;
     }
     /* Extremely constrained for small phones */
     .staff-profile-modal, .pc-editor-modal, .modal-panel { max-width: 460px !important; }
@@ -4196,11 +4025,14 @@ body.no-scroll { overflow: hidden; }
 
 @media (max-width: 420px) {
     .staff-profile-modal, .pc-editor-modal, .compare-modal-card, .modal-panel, .pin-modal-card {
-        width: calc(100% - 20px) !important;
-        max-width: 380px !important;
-        padding: 10px !important;
-        top: 28px !important;
+        width: min(100%, 520px) !important;
+        max-width: 520px !important;
+        padding: 14px !important;
+        border-radius: 14px !important;
+        top: auto !important;
         max-height: calc(100vh - 64px) !important;
+        overflow-y: auto !important;
+        margin: 0 auto !important;
     }
     /* Ensure inline style close buttons don't overflow the small header */
     .modal-close-button { width: 40px !important; height: 40px !important; right: 12px !important; }
@@ -4214,132 +4046,6 @@ body.no-scroll { overflow: hidden; }
     }
 }
 
-/* Final mobile header override for clean header layout */
-@media (max-width: 900px) {
-    .main-header {
-        display: grid !important;
-        grid-template-columns: 52px 1fr auto !important;
-        grid-template-rows: auto !important;
-        align-items: center !important;
-        gap: 0 12px !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        padding: 10px 12px !important;
-        background: var(--bhf-slate) !important;
-        box-shadow: 0 2px 10px rgba(2,6,23,0.18) !important;
-        z-index: 5000 !important;
-        height: auto !important;
-        min-height: 112px !important;
-    }
-    #sideMenuToggle {
-        grid-column: 1 / 2 !important;
-        width: 44px !important;
-        height: 44px !important;
-        align-self: center !important;
-        justify-self: start !important;
-    }
-    .main-header .logo-container {
-        grid-column: 2 / 3 !important;
-        justify-self: center !important;
-        align-self: center !important;
-        width: auto !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        gap: 10px !important;
-        margin: 0 !important;
-    }
-    .logo-container h1 {
-        font-size: 16px !important;
-        margin: 0 !important;
-        text-align: center !important;
-        line-height: 1.2 !important;
-    }
-    .logo-container p,
-    #headerSubtitleText {
-        display: none !important;
-    }
-    .profile-menu-wrapper {
-        grid-column: 3 / 4 !important;
-        justify-self: end !important;
-        align-self: center !important;
-        position: relative !important;
-        width: auto !important;
-    }
-    .profile-menu-btn {
-        min-width: 0 !important;
-        padding: 6px 10px !important;
-        font-size: 13px !important;
-        border-radius: 12px !important;
-    }
-    .profile-menu-avatar {
-        width: 34px !important;
-        height: 34px !important;
-    }
-    .nav-links {
-        grid-column: 3 / 4 !important;
-        grid-row: 1 / 2 !important;
-        width: auto !important;
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        justify-content: flex-end !important;
-        align-items: center !important;
-        gap: 8px !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow-x: hidden !important;
-    }
-    .nav-links button {
-        min-width: 0 !important;
-        padding: 8px 10px !important;
-        font-size: 13px !important;
-        border-radius: 10px !important;
-        white-space: nowrap !important;
-        max-width: 140px !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    .nav-links .admin-nav-btn {
-        background: var(--bhf-yellow) !important;
-        color: var(--bhf-slate) !important;
-        font-weight: 800 !important;
-    }
-    .remote-sync-status {
-        display: none !important;
-    }
-    .profile-dropdown {
-        right: 12px !important;
-        top: calc(100% + 6px) !important;
-        width: 220px !important;
-    }
-    .main-header + .content-bound,
-    main.content-bound,
-    body > .content-bound {
-        padding-top: 132px !important;
-        margin-top: 0 !important;
-    }
-}
-
-@media (max-width: 420px) {
-    .main-header {
-        padding: 10px 10px !important;
-    }
-    .nav-links {
-        gap: 4px !important;
-    }
-    .nav-links button {
-        max-width: 120px !important;
-    }
-    .main-header + .content-bound,
-    main.content-bound,
-    body > .content-bound {
-        padding-top: 128px !important;
-        margin-top: 0 !important;
-    }
-}
 
 
 
