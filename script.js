@@ -4589,8 +4589,7 @@ function showAdvancedHealthDashboard() {
     modal.style.top = '50%';
     modal.style.left = '50%';
     modal.style.transform = 'translate(-50%, -50%)';
-    modal.style.maxWidth = '1000px';
-    modal.style.width = 'calc(100% - 40px)';
+    // Let CSS handle responsive max-width/width so mobile rules can apply
     modal.style.maxHeight = '90vh';
     modal.style.overflow = 'auto';
     modal.style.background = '#ffffff';

@@ -145,10 +145,6 @@
                     <h3><i class="fas fa-exclamation-circle text-critical"></i> Immediate Action Required</h3>
                     <div id="immediateActionContent" style="margin-top: 20px;"></div>
                 </div>
-                <div id="broadcastAnnouncementBox" class="broadcast-announcement-box">
-                    <h3><i class="fas fa-bullhorn"></i> Latest Broadcasts</h3>
-                    <div id="broadcastAnnouncementContent" class="broadcast-announcement-content">Loading broadcast updates...</div>
-                </div>
             </div>
         </section>
 
@@ -808,7 +804,7 @@
         </section>
 
         <div id="announcementBranchModalOverlay" class="modal-overlay hidden" onclick="if (event.target === this) closeAnnouncementBranchModal()">
-            <div class="staff-profile-modal" style="width:min(92vw,560px); max-height:80vh; overflow:hidden;">
+            <div class="staff-profile-modal">
                 <button class="modal-close-button" onclick="closeAnnouncementBranchModal();" aria-label="Close branch selector"><i class="fas fa-times"></i></button>
                 <div style="margin-bottom: 18px;">
                     <h3 style="margin:0 0 6px 0;">Select Branches</h3>
@@ -1134,7 +1130,7 @@
                     </div>
                 </div>
                 <div class="table-container" style="overflow:auto;">
-                    <table class="user-list-table" style="width:100%; min-width:720px; border-collapse:collapse;">
+                    <table class="user-list-table" style="width:100%; border-collapse:collapse;">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -1317,7 +1313,7 @@
     </div>
 
     <div id="itTrackerActivitiesModal" class="modal-overlay hidden" onclick="if(event.target === this) closeITTrackerActivitiesModal()">
-        <div class="staff-profile-modal" style="width: min(96vw, 860px);">
+        <div class="staff-profile-modal">
             <button class="modal-close-button" onclick="closeITTrackerActivitiesModal()" aria-label="Close activities modal"><i class="fas fa-times"></i></button>
             <div style="margin-bottom: 20px;">
                 <h3 style="margin: 0 0 4px 0;">IT Activities History</h3>
@@ -1583,7 +1579,7 @@
     </div>
 
     <div id="floatingUpdateModalOverlay" class="modal-overlay hidden">
-    <div class="pc-editor-modal" style="max-width: 480px; width: 100%;">
+    <div class="pc-editor-modal">
         <h3 style="margin-bottom: 15px;"><i class="fas fa-sliders-h" style="color: #2563eb;"></i> Update PC Properties</h3>
         <div id="floatingUpdateForm">
             <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -1666,7 +1662,7 @@
 </div>
 
     <div id="deletePcModalOverlay" class="modal-overlay hidden">
-        <div class="pc-editor-modal" style="max-width: 520px; width: 100%;">
+        <div class="pc-editor-modal">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
                 <div>
                     <h3 style="margin:0; display:flex; align-items:center; gap:10px;"><i class="fas fa-trash-alt" style="color:#dc2626;"></i> Priority Delete Console</h3>
@@ -1693,7 +1689,7 @@
 
     <!-- Branch Issues Editor Modal (Admins only, opened after PIN) -->
     <div id="branchIssueEditorOverlay" class="modal-overlay hidden">
-        <div class="pc-editor-modal" style="max-width:800px; width: 95%; position:relative;">
+        <div class="pc-editor-modal">
             <button aria-label="Close" class="btn-cancel" style="position:absolute; top:12px; right:12px; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center;" onclick="closeBranchIssueEditor()">
                 <i class="fas fa-times"></i>
             </button>
