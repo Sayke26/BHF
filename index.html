@@ -71,6 +71,7 @@
                         <button type="button" onclick="startShiftForSelectedStaff(); closeAdminProfileMenu();"><span>Start Shift</span><i class="fas fa-play-circle"></i></button>
                         <button type="button" onclick="endShiftForSelectedStaff(); closeAdminProfileMenu();"><span>End Shift</span><i class="fas fa-power-off"></i></button>
                         <button type="button" onclick="logoutAdmin(); closeAdminProfileMenu();"><span>Log Out</span><i class="fas fa-sign-out-alt"></i></button>
+                        <button id="superAdminDeleteDatasBtn" type="button" class="delete-btn hidden" onclick="openSuperAdminDeleteModal(); closeAdminProfileMenu();"><span>Delete Datas</span><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>
@@ -724,7 +725,7 @@
 
                     <div class="it-tracker-toolbar">
                         <div class="it-tracker-action-panel">
-                            <button type="button" class="add-btn" onclick="openAddStaffModal();"><i class="fas fa-user-plus"></i> Add IT Staff</button>
+                            <button id="openAddStaffBtn" type="button" class="add-btn" onclick="openAddStaffModal(); console.debug('[Add IT Staff] clicked');"><i class="fas fa-user-plus"></i> Add IT Staff</button>
                             <button type="button" class="edit-btn" onclick="openUpdateProfileModal();"><i class="fas fa-user-edit"></i> Update Profile</button>
                             <button type="button" class="secondary-btn" onclick="openFeedbackQuestionModal();"><i class="fas fa-question-circle"></i> Feedback Settings</button>
                             <button type="button" class="secondary-btn" onclick="showStaffFeedbackHistoryPage();"><i class="fas fa-comments"></i> Feedbacks</button>
@@ -1230,6 +1231,31 @@
         </div>
     </div>
 
+    <div id="superAdminDeleteModalOverlay" class="modal-overlay hidden">
+        <div class="staff-profile-modal">
+            <button class="modal-close-button" onclick="closeSuperAdminDeleteModal()" aria-label="Close delete modal"><i class="fas fa-times"></i></button>
+            <div style="margin-bottom:12px;">
+                <h3 style="margin:0">Super Admin — Delete Datas</h3>
+                <p style="margin:6px 0 0 0; color:#64748b; font-size:13px;">Select which datasets to permanently remove. This action is irreversible.</p>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                <label><input type="checkbox" value="it_staffs" /> All IT Staffs</label>
+                <label><input type="checkbox" value="pcs" /> All PCs</label>
+                <label><input type="checkbox" value="branches" /> All Branch Customizations</label>
+                <label><input type="checkbox" value="analysis" /> All Analysis</label>
+                <label><input type="checkbox" value="modification_history" /> All Modification History</label>
+                <label><input type="checkbox" value="staff_feedbacks" /> All IT Feedback History</label>
+                <label><input type="checkbox" value="shift_history" /> All Shift Log History</label>
+                <label><input type="checkbox" value="it_activities" /> All IT Activities</label>
+                <label><input type="checkbox" value="inventory" /> All Inventory</label>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:12px; margin-top:16px;">
+                <button class="btn-secondary" onclick="closeSuperAdminDeleteModal()">Cancel</button>
+                <button class="delete-btn" onclick="performSuperAdminDelete()">Delete Selected</button>
+            </div>
+        </div>
+    </div>
+
     <div id="staffFeedbackModalOverlay" class="modal-overlay hidden">
         <div class="staff-profile-modal">
             <button class="modal-close-button" onclick="closeStaffFeedbackForm()" aria-label="Close feedback form"><i class="fas fa-times"></i></button>
@@ -1259,31 +1285,7 @@
                 <input id="feedbackRatingInput" type="hidden" value="0" />
             </div>
             <div class="form-element">
-                <label id="feedbackQuestionLabel1">How satisfied are you with the assistance provided by the IT Support Specialist?</label>
-                <div class="feedback-radio-group">
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion1" value="Very Satisfied"><span>☐ Very Satisfied</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion1" value="Satisfied"><span>☐ Satisfied</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion1" value="Neutral"><span>☐ Neutral</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion1" value="Dissatisfied"><span>☐ Dissatisfied</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion1" value="Very Dissatisfied"><span>☐ Very Dissatisfied</span></label>
-                </div>
-            </div>
-            <div class="form-element">
-                <label id="feedbackQuestionLabel2">Was your IT concern resolved in a timely and efficient manner?</label>
-                <div class="feedback-radio-group">
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion2" value="Yes"><span>☐ Yes</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion2" value="Partially"><span>☐ Partially</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion2" value="No"><span>☐ No</span></label>
-                </div>
-            </div>
-            <div class="form-element">
-                <label id="feedbackQuestionLabel3">How would you rate the professionalism, courtesy, and communication of the IT Support Specialist?</label>
-                <div class="feedback-radio-group">
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion3" value="Excellent"><span>☐ Excellent</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion3" value="Good"><span>☐ Good</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion3" value="Fair"><span>☐ Fair</span></label>
-                    <label class="feedback-option"><input type="radio" name="feedbackQuestion3" value="Poor"><span>☐ Poor</span></label>
-                </div>
+                <div id="feedbackQuestionsRenderContainer"></div>
             </div>
             <div class="form-element">
                 <label for="feedbackCommentText">Feedback Message</label>
@@ -1502,19 +1504,12 @@
             <button class="modal-close-button" onclick="closeFeedbackQuestionModal()" aria-label="Close feedback question modal"><i class="fas fa-times"></i></button>
             <div style="margin-bottom: 20px;">
                 <h3>Feedback Questions</h3>
-                <p style="margin: 0; color: #64748b; font-size: 14px;">Edit the questions used in the staff feedback flow.</p>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Edit the questions and answer choices used in the staff feedback flow.</p>
             </div>
             <div class="form-element">
-                <label for="feedbackQuestionInput1">Question 1</label>
-                <input id="feedbackQuestionInput1" type="text" placeholder="e.g. How effectively did the staff resolve the issue?" />
-            </div>
-            <div class="form-element">
-                <label for="feedbackQuestionInput2">Question 2</label>
-                <input id="feedbackQuestionInput2" type="text" placeholder="e.g. Did the staff communicate updates clearly?" />
-            </div>
-            <div class="form-element">
-                <label for="feedbackQuestionInput3">Question 3</label>
-                <input id="feedbackQuestionInput3" type="text" placeholder="e.g. Would you request this staff again?" />
+                <label>Questions</label>
+                <div id="feedbackQuestionList"></div>
+                <button type="button" class="add-btn" onclick="addFeedbackQuestionSetting();" style="margin-top: 10px; background: #10b981;">+ Add Question</button>
             </div>
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
                 <button type="button" class="btn-cancel" onclick="closeFeedbackQuestionModal()">Cancel</button>

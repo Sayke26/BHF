@@ -1565,6 +1565,27 @@ tr:hover td { background-color: #f8fafc; }
 @media (max-width: 720px) {
     .inventory-report-layout { gap: 18px; }
 }
+
+/* Ensure KPI/summary cards inside the metric summary modal use two columns on small screens */
+@media (max-width: 900px) {
+    #metricSummaryOverlay .analysis-detail-grid,
+    .metric-summary-modal .analysis-detail-grid {
+        grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
+        gap: 12px !important;
+    }
+    #metricSummaryOverlay .summary-kpi,
+    .metric-summary-modal .summary-kpi {
+        padding: 14px !important;
+        border-radius: 12px !important;
+    }
+}
+
+@media (max-width: 380px) {
+    #metricSummaryOverlay .analysis-detail-grid,
+    .metric-summary-modal .analysis-detail-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
 .inventory-insight-strip {
     display: flex;
     flex-wrap: wrap;
@@ -1739,6 +1760,12 @@ button.add-btn:hover { background: #3f8ee7; }
 button.edit-btn { background: #f2f7ff; color: #102d6d; }
 button.edit-btn:hover { background: #e8f0ff; }
 button.delete-btn { background: #fff2f2; color: #c92f2f; }
+.feedback-question-setting { border: 1px solid #cbd5e1; border-radius: 16px; padding: 18px; margin-bottom: 16px; background: #f8fbff; position: relative; }
+.feedback-choice-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.feedback-choice-row { display: flex; gap: 10px; align-items: center; }
+.feedback-choice-input { flex: 1 1 auto; min-width: 0; width: 100%; }
+.feedback-choice-row button { min-width: 90px; padding: 9px 12px; }
+.feedback-question-setting .form-element label { margin-bottom: 8px; display: inline-block; }
 button.delete-btn:hover { background: #ffe5e5; }
 
 .analysis-toolbar-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -2726,11 +2753,13 @@ button.btn-cancel:hover { background: #eff6ff; }
         right: 16px;
         width: 40px;
         height: 40px;
+        z-index: 60;
     }
     .staff-profile-modal {
         width: min(100%, 88vw);
         max-width: 88vw;
         padding: 16px;
+        padding-top: 48px;
         max-height: 84vh;
         border-radius: 20px;
         margin: 0;
@@ -3800,46 +3829,91 @@ body.no-scroll { overflow: hidden; }
    enabling internal scrolling.
    ========================================================================== */
 @media (max-width: 900px) {
-    /* Constrain common modal/dialog containers to viewport and allow scroll */
-    .modal, .modal-card, .advanced-modal, .metric-summary-modal, .confirm-modal-card, .metric-summary-modal, .summary-panel, .popup-card {
+    .modal-overlay,
+    .inventory-overlay {
+        padding: 10px !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+    }
+
+    .modal-overlay > .modal,
+    .modal-overlay > .modal-card,
+    .modal-overlay > .advanced-modal,
+    .modal-overlay > .metric-summary-modal,
+    .modal-overlay > .confirm-modal-card,
+    .modal-overlay > .pin-modal-card,
+    .modal-overlay > .staff-profile-modal,
+    .modal-overlay > .pc-editor-modal,
+    .modal-overlay > .compare-modal-card,
+    .modal-overlay > .popup-card,
+    .modal-overlay > .modal-panel {
+        width: min(100%, 540px) !important;
+        max-width: 540px !important;
+        max-height: calc(100dvh - 20px) !important;
+        padding: 14px !important;
+        border-radius: 16px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        margin: 0 auto !important;
+        box-sizing: border-box !important;
+    }
+
+    .modal-overlay .modal-body-grid,
+    .modal-overlay .summary-panel-content,
+    .modal-overlay .staff-profile-content {
+        display: block !important;
+        gap: 12px !important;
+    }
+
+    .modal-overlay .modal-actions,
+    .modal-overlay .summary-panel-actions,
+    .modal-overlay .staff-modal-actions {
+        display: grid !important;
+        gap: 10px !important;
+    }
+
+    .modal-overlay button {
+        width: 100% !important;
+    }
+
+    .modal-overlay input,
+    .modal-overlay select,
+    .modal-overlay textarea {
+        font-size: 16px !important;
+    }
+
+    .modal, .modal-card, .advanced-modal, .metric-summary-modal, .confirm-modal-card, .summary-panel, .popup-card {
         position: relative !important;
         left: auto !important;
         top: auto !important;
         transform: none !important;
-        width: min(100%, 520px) !important;
-        max-width: 520px !important;
+        width: min(100%, 540px) !important;
+        max-width: 540px !important;
         padding: 14px !important;
         border-radius: 14px !important;
-        max-height: calc(100vh - 120px) !important;
+        max-height: calc(100dvh - 20px) !important;
         overflow-y: auto !important;
         box-sizing: border-box !important;
         margin: 0 auto !important;
     }
 
-    /* Metric summary specific tweaks */
-    .metric-summary-modal { left: auto !important; top: auto !important; width: min(100%, 520px) !important; padding: 12px !important; margin: 0 auto !important; }
+    .metric-summary-modal { padding: 12px !important; }
     .metric-summary-modal .summary-panel-content { padding: 12px !important; }
-
-    /* Advanced / confirm modals */
     .advanced-modal, .confirm-modal-card { width: calc(100% - 24px) !important; max-width: 680px !important; }
 
-    /* Ensure dropdowns and small popovers fit on screen */
     .profile-dropdown { position: absolute !important; right: 12px !important; left: auto !important; width: auto !important; min-width: 180px; max-width: calc(100% - 24px); }
 
-    /* Make dense grids single-column for readability */
-    .immediate-grid, .dashboard-split-matrix, .metrics-card-grid, .branch-grid, .inventory-findings-panel, .home-edit-panel__grid {
+    .immediate-grid, .dashboard-split-matrix, .metrics-card-grid, .branch-grid, .inventory-findings-panel, .home-edit-panel__grid,
+    .team-overview, .profile-grid, .announcement-branch-modal-list {
         grid-template-columns: 1fr !important;
     }
 
-    /* Reduce card/modal typography and paddings slightly */
     .modal h3, .metric-summary-modal .summary-panel-title, .advanced-modal h3 { font-size: 18px !important; }
     .modal p, .metric-summary-modal p, .advanced-modal p { font-size: 13px !important; }
     .modal .btn, .confirm-modal-card .btn { padding: 10px 12px !important; }
 
-    /* Prevent any inner fixed-width elements from overflowing viewport */
     .modal * { max-width: 100% !important; box-sizing: border-box !important; }
 
-    /* Avoid the side menu forcing content off-screen on small devices */
     body.side-open .content-bound, body.side-open .main-header {
         transform: none !important;
         width: 100% !important;
@@ -3848,38 +3922,17 @@ body.no-scroll { overflow: hidden; }
         padding-right: 16px !important;
     }
 
-    /* Make the side menu overlay (not push) on small screens */
     .side-menu { z-index: 4000; }
     .side-menu.open { position: fixed; left: 0; top: 0; height: 100vh; }
-
-    /* Touch targets and spacing */
     .side-menu .side-nav-btn { padding: 14px 16px !important; font-size: 15px !important; }
-}
 
-@media (max-width: 420px) {
-    /* Extra-small phones: tighter fit */
-    .modal, .metric-summary-modal, .advanced-modal, .confirm-modal-card {
-        width: min(100%, 520px) !important;
-        max-width: 520px !important;
-        padding: 10px !important;
-        border-radius: 10px !important;
-        top: auto !important;
-        max-height: calc(100vh - 72px) !important;
-        margin: 0 auto !important;
-    }
-    .profile-dropdown { right: 8px !important; max-width: calc(100% - 16px); }
-}
+    .team-overview { gap: 16px !important; }
+    .staff-showcase, .home-announcements { padding: 16px !important; }
+    .home-hero { padding: 16px !important; margin: 18px 0 18px !important; }
+    .hero-visual.hero-map, .home-hero .hero-map { height: clamp(280px, 48vh, 360px) !important; min-height: 280px !important; }
+    .announcement-list { max-height: 280px !important; }
+    .profile-grid { gap: 14px !important; }
 
-/* Further mobile safety: prevent inner elements from forcing modal width */
-@media (max-width: 900px) {
-    /* Ensure no child element forces a modal wider than the viewport */
-    .modal, .modal * , .modal-panel, .pc-editor-modal, .staff-profile-modal {
-        min-width: 0 !important;
-        max-width: 100% !important;
-        box-sizing: border-box !important;
-    }
-
-    /* Make tables responsive inside modals */
     .modal table, .modal .user-list-table, .modal .table-container {
         width: 100% !important;
         min-width: 0 !important;
@@ -3887,17 +3940,98 @@ body.no-scroll { overflow: hidden; }
         display: block !important;
     }
 
-    /* Reduce overlay padding so modal width calculation matches viewport */
     .modal-overlay { padding: 12px !important; }
     .modal-overlay > * { margin: 0 auto !important; }
 }
 
-@media (max-width: 420px) {
-    .modal-overlay { padding: 8px !important; }
+/* Force two profile cards per row on small screens and adjust card sizing */
+@media (max-width: 900px) {
+    .profile-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 12px !important;
+    }
+    .profile-card {
+        padding: 16px !important;
+        border-radius: 18px !important;
+    }
 }
 
-/* Specific modal sizing for analysis-related modals on small screens */
+/* Very small phones: keep two columns down to 360px, then fallback to single column */
+@media (max-width: 360px) {
+    .profile-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Staff profile modal: tighter mobile layout */
 @media (max-width: 900px) {
+    .staff-profile-modal {
+        width: calc(100% - 28px) !important;
+        max-width: 480px !important;
+        padding: 16px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 30px 80px rgba(2,6,23,0.45) !important;
+    }
+    .staff-profile-avatar {
+        width: 100px !important;
+        height: 100px !important;
+        border-radius: 16px !important;
+        margin: 0 auto 10px auto !important;
+    }
+    .staff-profile-modal .staff-modal-actions {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+    .modal-close-button { top: 12px !important; right: 12px !important; }
+}
+
+@media (max-width: 420px) {
+    .staff-profile-modal { max-width: 420px !important; padding: 12px !important; }
+    .staff-profile-avatar { width: 88px !important; height: 88px !important; }
+}
+
+@media (max-width: 420px) {
+    .modal, .metric-summary-modal, .advanced-modal, .confirm-modal-card {
+        width: min(100%, 520px) !important;
+        max-width: 520px !important;
+        padding: 10px !important;
+        border-radius: 10px !important;
+        top: auto !important;
+        max-height: calc(100dvh - 72px) !important;
+        margin: 0 auto !important;
+    }
+
+    .modal-overlay,
+    .inventory-overlay {
+        padding: 8px !important;
+    }
+
+    .modal-overlay > .modal,
+    .modal-overlay > .metric-summary-modal,
+    .modal-overlay > .advanced-modal,
+    .modal-overlay > .confirm-modal-card,
+    .modal-overlay > .pin-modal-card,
+    .modal-overlay > .staff-profile-modal,
+    .modal-overlay > .pc-editor-modal,
+    .modal-overlay > .compare-modal-card,
+    .modal-overlay > .modal-panel {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+        max-height: calc(100dvh - 12px) !important;
+    }
+
+    .profile-dropdown { right: 8px !important; max-width: calc(100% - 16px); }
+    .modal-close-button { width: 40px !important; height: 40px !important; right: 12px !important; }
+}
+
+@media (max-width: 900px) {
+    .modal, .modal * , .modal-panel, .pc-editor-modal, .staff-profile-modal {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
     .staff-profile-modal,
     .pc-editor-modal,
     .modal-panel,
@@ -3908,50 +4042,30 @@ body.no-scroll { overflow: hidden; }
         max-width: 720px !important;
         padding: 16px !important;
         border-radius: 12px !important;
-        max-height: 88vh !important;
+        max-height: 88dvh !important;
         overflow-y: auto !important;
         margin: 0 auto !important;
         box-sizing: border-box !important;
     }
-}
 
-@media (max-width: 420px) {
-    .staff-profile-modal,
-    .pc-editor-modal,
-    .modal-panel,
-    .metric-summary-modal,
-    .compare-modal-card,
-    .pin-modal-card {
-        width: calc(100% - 16px) !important;
-        max-width: 380px !important;
-        padding: 12px !important;
-        border-radius: 10px !important;
-        max-height: 90vh !important;
-    }
-}
-
-/* Make metric/analysis modals allow internal vertical scrolling and avoid clipping rows on small screens */
-@media (max-width: 900px) {
     .metric-summary-modal {
         overflow: visible !important;
-        max-height: 92vh !important;
+        max-height: 92dvh !important;
     }
 
     .metric-summary-modal .summary-panel-content {
-        max-height: calc(92vh - 120px) !important;
+        max-height: calc(92dvh - 120px) !important;
         overflow-y: auto !important;
         padding: 12px !important;
         display: block !important;
     }
 
-    /* Ensure table container can expand vertically inside modal content */
     .metric-summary-modal .table-container {
         max-height: none !important;
         overflow-x: auto !important;
         overflow-y: visible !important;
     }
 
-    /* If modal overlay adds too much constraining padding, reduce it on mobile */
     .modal-overlay {
         padding-top: 12px !important;
         padding-bottom: 12px !important;
@@ -3959,8 +4073,6 @@ body.no-scroll { overflow: hidden; }
     }
 }
 
-
-/* Ensure tables inside analysis modals are visible and scrollable on mobile */
 @media (max-width: 900px) {
     .metric-summary-modal .table-container,
     .staff-profile-modal .table-container,
@@ -3973,7 +4085,6 @@ body.no-scroll { overflow: hidden; }
         min-width: 0 !important;
     }
 
-    /* Keep native table layout; let the container handle horizontal scrolling */
     .metric-summary-modal table,
     .staff-profile-modal table,
     .pc-editor-modal table,
@@ -3987,7 +4098,6 @@ body.no-scroll { overflow: hidden; }
         border-collapse: collapse !important;
     }
 
-    /* Override inline min-widths on problematic tables */
     .metric-summary-modal .user-list-table,
     .staff-profile-modal .user-list-table,
     .pc-editor-modal .user-list-table {
@@ -4003,10 +4113,8 @@ body.no-scroll { overflow: hidden; }
     }
 }
 
-/* Strong overrides for any remaining modal variants (force-fit on mobile) */
 @media (max-width: 900px) {
-    /* Override specific modal classes often used with inline widths */
-    .staff-profile-modal, .pc-editor-modal, .compare-modal-card, .compare-modal-section, .compare-modal-footer, .compare-modal-card, .staff-profile-modal, .pin-modal-card, .modal-panel {
+    .staff-profile-modal, .pc-editor-modal, .compare-modal-card, .compare-modal-section, .compare-modal-footer, .pin-modal-card, .modal-panel {
         width: min(100%, 520px) !important;
         max-width: 520px !important;
         padding: 12px !important;
@@ -4016,10 +4124,9 @@ body.no-scroll { overflow: hidden; }
         transform: none !important;
         box-sizing: border-box !important;
         overflow-y: auto !important;
-        max-height: calc(100vh - 80px) !important;
+        max-height: calc(100dvh - 80px) !important;
         margin: 0 auto !important;
     }
-    /* Extremely constrained for small phones */
     .staff-profile-modal, .pc-editor-modal, .modal-panel { max-width: 460px !important; }
 }
 
@@ -4030,22 +4137,18 @@ body.no-scroll { overflow: hidden; }
         padding: 14px !important;
         border-radius: 14px !important;
         top: auto !important;
-        max-height: calc(100vh - 64px) !important;
+        max-height: calc(100dvh - 64px) !important;
         overflow-y: auto !important;
         margin: 0 auto !important;
     }
-    /* Ensure inline style close buttons don't overflow the small header */
-    .modal-close-button { width: 40px !important; height: 40px !important; right: 12px !important; }
 }
 
-/* If JS injects modals with inline styles, ensure our mobile rules win */
 @media (max-width: 900px) {
     .modal[style], .modal-panel[style], .pc-editor-modal[style] {
         width: calc(100% - 28px) !important;
         max-width: 520px !important;
     }
 }
-
 
 
 

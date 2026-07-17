@@ -1072,6 +1072,12 @@ const DEFAULT_FEEDBACK_QUESTIONS = [
     "How would you rate the professionalism, courtesy, and communication of the IT Support Specialist?"
 ];
 
+const DEFAULT_FEEDBACK_CHOICES = [
+    ["Very Satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very Dissatisfied"],
+    ["Yes", "Partially", "No"],
+    ["Excellent", "Good", "Fair", "Poor"]
+];
+
 function escapeHtml(str) {
     if (str == null) return '';
     return String(str)
@@ -1098,28 +1104,58 @@ function getStoredFeedbackQuestions() {
     return [...DEFAULT_FEEDBACK_QUESTIONS];
 }
 
+function getStoredFeedbackChoices() {
+    const raw = localStorage.getItem('feedbackChoices');
+    if (raw) {
+        try {
+            const stored = JSON.parse(raw);
+            if (Array.isArray(stored) && stored.length === 3 && stored.every(arr => Array.isArray(arr) && arr.every(choice => typeof choice === 'string'))) {
+                return stored.map(arr => arr.length ? arr : []);
+            }
+        } catch (e) {
+            console.warn('Invalid stored feedback choices:', e);
+        }
+    }
+    localStorage.setItem('feedbackChoices', JSON.stringify(DEFAULT_FEEDBACK_CHOICES));
+    return JSON.parse(JSON.stringify(DEFAULT_FEEDBACK_CHOICES));
+}
+
 function saveFeedbackQuestions() {
-    const q1 = document.getElementById('feedbackQuestionInput1')?.value.trim();
-    const q2 = document.getElementById('feedbackQuestionInput2')?.value.trim();
-    const q3 = document.getElementById('feedbackQuestionInput3')?.value.trim();
-    const questions = [q1 || DEFAULT_FEEDBACK_QUESTIONS[0], q2 || DEFAULT_FEEDBACK_QUESTIONS[1], q3 || DEFAULT_FEEDBACK_QUESTIONS[2]];
+    const questionItems = Array.from(document.querySelectorAll('.feedback-question-setting'));
+    const questions = [];
+    const choices = [];
+
+    questionItems.forEach((item) => {
+        const textInput = item.querySelector('.feedback-question-text');
+        const choiceInputs = Array.from(item.querySelectorAll('.feedback-choice-input'));
+        const questionText = textInput?.value.trim();
+        const parsedChoices = choiceInputs.map(input => input.value.trim()).filter(line => line);
+
+        if (questionText) {
+            questions.push(questionText);
+            choices.push(parsedChoices.length ? parsedChoices : ["Yes", "No"]);
+        }
+    });
+
+    if (questions.length === 0) {
+        toastNotice('warning', 'No Questions', 'Please add at least one feedback question before saving.');
+        return;
+    }
+
     localStorage.setItem('feedbackQuestions', JSON.stringify(questions));
-    updateFeedbackQuestionLabels();
-    toastNotice('success', 'Feedback Questions Saved', 'Feedback questions were updated successfully.');
+    localStorage.setItem('feedbackChoices', JSON.stringify(choices));
+    renderFeedbackQuestionChoices();
+    toastNotice('success', 'Feedback Settings Saved', 'Feedback questions and answer choices were updated successfully.');
+}
+
+function parseFeedbackChoices(elementId) {
+    const input = document.getElementById(elementId);
+    if (!input) return [];
+    return input.value.split('\n').map(line => line.trim()).filter(line => line);
 }
 
 function updateFeedbackQuestionLabels() {
-    const questions = getStoredFeedbackQuestions();
-    const labels = [
-        document.getElementById('feedbackQuestionLabel1'),
-        document.getElementById('feedbackQuestionLabel2'),
-        document.getElementById('feedbackQuestionLabel3')
-    ];
-    labels.forEach((labelEl, index) => {
-        if (labelEl) {
-            labelEl.textContent = questions[index] || DEFAULT_FEEDBACK_QUESTIONS[index];
-        }
-    });
+    // No-op for dynamic question rendering.
 }
 
 function setFeedbackStarRating(value) {
@@ -1151,17 +1187,112 @@ function populateFeedbackBranchOptions() {
 }
 
 function loadFeedbackQuestionSettings() {
+    renderFeedbackQuestionSettings();
+}
+
+function renderFeedbackQuestionSettings() {
     const questions = getStoredFeedbackQuestions();
-    if (document.getElementById('feedbackQuestionInput1')) {
-        document.getElementById('feedbackQuestionInput1').value = questions[0];
+    const choices = getStoredFeedbackChoices();
+    const container = document.getElementById('feedbackQuestionList');
+    if (!container) return;
+
+    container.innerHTML = questions.map((question, index) => {
+        const choiceList = choices[index] && choices[index].length ? choices[index] : ['Yes', 'No'];
+        const choiceRows = choiceList.map((choice, choiceIndex) => `
+            <div class="feedback-choice-row">
+                <input class="feedback-choice-input" type="text" value="${escapeHtml(choice)}" placeholder="Enter answer choice" />
+                <button type="button" class="btn-secondary" onclick="removeFeedbackChoice(${index}, ${choiceIndex})">Remove</button>
+            </div>`).join('');
+
+        return `
+            <div class="feedback-question-setting" data-index="${index}" style="border:1px solid #cbd5e1; border-radius:12px; padding:18px; margin-bottom:16px; position:relative; background: #f8fbff;">
+                <button type="button" class="btn-secondary" style="position:absolute; top:14px; right:14px; padding:6px 10px;" onclick="removeFeedbackQuestionSetting(${index})">Delete</button>
+                <div class="form-element">
+                    <label>Question</label>
+                    <input class="feedback-question-text" type="text" value="${escapeHtml(question)}" placeholder="Enter the feedback question" />
+                </div>
+                <div class="form-element">
+                    <label>Answer choices</label>
+                    <div class="feedback-choice-list">${choiceRows}</div>
+                    <button type="button" class="add-btn" style="margin-top: 10px; background: #2563eb; color: white;" onclick="addFeedbackChoice(${index})">+ Add Choice</button>
+                    <small style="color:#64748b; display:block; margin-top:8px;">Use one row per answer choice. At least one choice is required.</small>
+                </div>
+            </div>`;
+    }).join('');
+}
+
+function addFeedbackQuestionSetting() {
+    const questions = getStoredFeedbackQuestions();
+    const choices = getStoredFeedbackChoices();
+    questions.push('New question');
+    choices.push(['Yes', 'No']);
+    localStorage.setItem('feedbackQuestions', JSON.stringify(questions));
+    localStorage.setItem('feedbackChoices', JSON.stringify(choices));
+    renderFeedbackQuestionSettings();
+}
+
+function addFeedbackChoice(questionIndex) {
+    const questions = getStoredFeedbackQuestions();
+    const choices = getStoredFeedbackChoices();
+    if (!choices[questionIndex]) {
+        choices[questionIndex] = [''];
+    } else {
+        choices[questionIndex].push('');
     }
-    if (document.getElementById('feedbackQuestionInput2')) {
-        document.getElementById('feedbackQuestionInput2').value = questions[1];
+    localStorage.setItem('feedbackQuestions', JSON.stringify(questions));
+    localStorage.setItem('feedbackChoices', JSON.stringify(choices));
+    renderFeedbackQuestionSettings();
+}
+
+function removeFeedbackChoice(questionIndex, choiceIndex) {
+    const questions = getStoredFeedbackQuestions();
+    const choices = getStoredFeedbackChoices();
+    if (!choices[questionIndex] || choices[questionIndex].length <= 1) {
+        toastNotice('warning', 'Cannot remove', 'At least one answer choice must remain.');
+        return;
     }
-    if (document.getElementById('feedbackQuestionInput3')) {
-        document.getElementById('feedbackQuestionInput3').value = questions[2];
+    choices[questionIndex].splice(choiceIndex, 1);
+    localStorage.setItem('feedbackQuestions', JSON.stringify(questions));
+    localStorage.setItem('feedbackChoices', JSON.stringify(choices));
+    renderFeedbackQuestionSettings();
+}
+
+function removeFeedbackQuestionSetting(index) {
+    const questions = getStoredFeedbackQuestions();
+    const choices = getStoredFeedbackChoices();
+    if (questions.length <= 1) {
+        toastNotice('warning', 'Cannot remove', 'At least one feedback question must remain.');
+        return;
     }
-    updateFeedbackQuestionLabels();
+    questions.splice(index, 1);
+    choices.splice(index, 1);
+    localStorage.setItem('feedbackQuestions', JSON.stringify(questions));
+    localStorage.setItem('feedbackChoices', JSON.stringify(choices));
+    renderFeedbackQuestionSettings();
+}
+
+function renderFeedbackQuestionChoices() {
+    const questions = getStoredFeedbackQuestions();
+    const choices = getStoredFeedbackChoices();
+    const container = document.getElementById('feedbackQuestionsRenderContainer');
+    if (!container) return;
+
+    container.innerHTML = questions.map((question, index) => {
+        const choiceList = choices[index] && choices[index].length ? choices[index] : DEFAULT_FEEDBACK_CHOICES[index] || ['Yes', 'No'];
+        const choiceHtml = choiceList.map(choice => {
+            const escaped = escapeHtml(choice);
+            return `
+                <label class="feedback-option">
+                    <input type="radio" name="feedbackQuestion${index}" value="${escaped}" />
+                    <span>☐ ${escaped}</span>
+                </label>`;
+        }).join('');
+        return `
+            <div class="form-element">
+                <label>${escapeHtml(question)}</label>
+                <div class="feedback-radio-group">${choiceHtml}</div>
+            </div>`;
+    }).join('');
 }
 
 function initializeFeedbackControls() {
@@ -1437,6 +1568,22 @@ const DEFAULT_IT_STAFF_PROFILES = {
         location: '',
         remarks: ''
     }
+    ,
+    superadmin: {
+        id: 'superadmin',
+        idNumber: '000',
+        name: 'Super Admin',
+        role: 'IT Support Specialist',
+        username: 'superadminbhf',
+        password: '123456',
+        image: 'images/IT0.jpg',
+        phone: '',
+        email: '',
+        link: '',
+        location: '',
+        remarks: '',
+        superAdmin: true
+    }
 };
 
 const DEFAULT_IT_ROLE_DEFINITIONS = {
@@ -1463,7 +1610,7 @@ const DEFAULT_IT_ROLE_DEFINITIONS = {
             disable: true,
             enable: true,
             delete: false,
-            addStaff: false
+            addStaff: true
         }
     }
 };
@@ -1473,7 +1620,11 @@ function getStoredRoleDefinitions() {
     if (raw) {
         try {
             const parsed = JSON.parse(raw);
-            return ensureDefaultRoleDefinitions(parsed);
+            const sanitized = sanitizeRoleDefinitions(parsed);
+            if (JSON.stringify(sanitized) !== JSON.stringify(parsed)) {
+                localStorage.setItem('itStaffRoleDefinitions', JSON.stringify(sanitized));
+            }
+            return ensureDefaultRoleDefinitions(sanitized);
         } catch (e) {
             console.warn('Failed to parse stored role definitions:', e);
         }
@@ -1483,8 +1634,18 @@ function getStoredRoleDefinitions() {
     return copy;
 }
 
+function sanitizeRoleDefinitions(definitions) {
+    const sanitized = { ...definitions };
+    Object.keys(sanitized).forEach((key) => {
+        if (normalizeRole(key) === 'super administrator' || normalizeRole(sanitized[key]?.name) === 'super administrator') {
+            delete sanitized[key];
+        }
+    });
+    return sanitized;
+}
+
 function ensureDefaultRoleDefinitions(storedDefinitions) {
-    const repaired = { ...storedDefinitions };
+    const repaired = sanitizeRoleDefinitions({ ...storedDefinitions });
     let changed = false;
     Object.entries(DEFAULT_IT_ROLE_DEFINITIONS).forEach(([norm, def]) => {
         if (!repaired[norm]) {
@@ -1539,6 +1700,7 @@ function persistItShiftHistory() {
 function getAvailableStaffRoleNames(includeManager = false) {
     const definitions = getStoredRoleDefinitions();
     return Object.values(definitions)
+        .filter(def => normalizeRole(def.name) !== 'super administrator')
         .filter(def => includeManager || normalizeRole(def.name) !== 'it manager')
         .sort((a, b) => (a.rank || 999) - (b.rank || 999))
         .map(def => def.name);
@@ -1582,7 +1744,9 @@ function populateRoleRankOptions() {
 function populateAddStaffRoleOptions() {
     const select = document.getElementById('newStaffRole');
     if (!select) return;
-    const roles = getAvailableStaffRoleNames(false);
+    const currentRole = getCurrentAdminProfile()?.role || '';
+    const includeManager = canAssignITManagerRole(currentRole);
+    const roles = getAvailableStaffRoleNames(includeManager);
     if (!roles.length) {
         select.innerHTML = '<option value="">No staff roles available</option>';
         return;
@@ -1698,6 +1862,12 @@ function getStoredStaffProfiles() {
             const parsed = JSON.parse(raw);
             // Auto-repair: ensure all default profiles exist with correct structure
             const repaired = normalizeStoredProfiles(parsed);
+            // Ensure superadmin exists for upgraded installs
+            if (!repaired.superadmin && DEFAULT_IT_STAFF_PROFILES.superadmin) {
+                repaired.superadmin = JSON.parse(JSON.stringify(DEFAULT_IT_STAFF_PROFILES.superadmin));
+                // Preserve any existing adminUserKey if present
+                console.log('Injected superadmin profile into stored profiles');
+            }
             if (JSON.stringify(repaired) !== JSON.stringify(parsed)) {
                 localStorage.setItem('itStaffProfiles', JSON.stringify(repaired));
                 console.log('Auto-repaired stored profiles: restored missing default values.');
@@ -1721,6 +1891,24 @@ function getStoredStaffProfiles() {
     });
     localStorage.setItem('itStaffProfiles', JSON.stringify(migrated));
     return migrated;
+}
+
+// Return stored profiles excluding the superadmin ghost account for UI listings
+function getVisibleStaffProfiles(includeDisabled = false) {
+    try {
+        const all = getStoredStaffProfiles() || {};
+        const visible = {};
+        Object.entries(all).forEach(([k, v]) => {
+            if (!v) return;
+            const isSuper = (v.superAdmin === true) || k === 'superadmin' || (v.id === 'superadmin');
+            if (isSuper) return; // hide superadmin from UI
+            if (!includeDisabled && v.disabled) return;
+            visible[k] = v;
+        });
+        return visible;
+    } catch (e) {
+        return {};
+    }
 }
 
 function normalizeStoredProfiles(storedProfiles) {
@@ -1845,6 +2033,120 @@ function updateAdminProfileMenu() {
             dropdownAvatar.style.backgroundImage = 'none';
         }
     }
+    // Show super admin delete button only for super admin users
+    try {
+        const superBtn = document.getElementById('superAdminDeleteDatasBtn');
+        if (superBtn) {
+            const isSuper = !!(profile && (profile.superAdmin === true || (profile.id === 'superadmin') || ((profile.username||'').toLowerCase() === 'superadminbhf')));
+            superBtn.classList.toggle('hidden', !isSuper);
+        }
+    } catch (e) { /* ignore */ }
+}
+
+function openSuperAdminDeleteModal() {
+    document.getElementById('superAdminDeleteModalOverlay')?.classList.remove('hidden');
+}
+
+function closeSuperAdminDeleteModal() {
+    document.getElementById('superAdminDeleteModalOverlay')?.classList.add('hidden');
+}
+
+async function performSuperAdminDelete() {
+    const overlay = document.getElementById('superAdminDeleteModalOverlay');
+    if (!overlay) return;
+    const checked = Array.from(overlay.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+    if (!checked || checked.length === 0) {
+        toastNotice('warning', 'No selection', 'Please select at least one dataset to delete.');
+        return;
+    }
+    if (!confirm('Permanently delete selected datasets? This cannot be undone.')) return;
+
+    const currentAdmin = getCurrentAdminKey() || adminUserKey || 'superadmin';
+
+    try {
+        // All IT Staffs
+        if (checked.includes('it_staffs')) {
+            // Preserve current superadmin if present to avoid lockout
+            const stored = getStoredStaffProfiles();
+            const keepKey = currentAdmin;
+            const newProfiles = {};
+            if (stored[keepKey]) newProfiles[keepKey] = stored[keepKey];
+            persistStaffProfiles(newProfiles, { force: true, updatedBy: currentAdmin });
+        }
+
+        // All PCs / Inventory
+        if (checked.includes('pcs') || checked.includes('inventory')) {
+            pcData = {};
+            try { localStorage.setItem('pcData', JSON.stringify(pcData)); } catch (e) {}
+            try { pushPcDataToCloud().catch(()=>{}); } catch(e){}
+            try { renderInventoryReportView(); } catch(e){}
+        }
+
+        // Branch customizations (home edit content)
+        if (checked.includes('branches')) {
+            try { persistHomeEditContent(DEFAULT_HOME_EDIT_CONTENT); } catch (e) { localStorage.removeItem(HOME_EDIT_STORAGE_KEY); }
+        }
+
+        // Analysis
+        if (checked.includes('analysis')) {
+            analysisHistory = {};
+            analysisProblemHistoryEntries = [];
+            try { renderAnalysisView(); } catch (e) {}
+        }
+
+        // Modification history / IT activities
+        if (checked.includes('modification_history') || checked.includes('it_activities')) {
+            modificationHistory = [];
+            try { persistModificationHistory(); } catch (e) {}
+            try { pushHistoryToCloud().catch(()=>{}); } catch(e){}
+        }
+
+        // Staff feedbacks
+        if (checked.includes('staff_feedbacks')) {
+            try { localStorage.setItem('staffFeedbacks', JSON.stringify([])); } catch (e) {}
+            try { renderStaffFeedbackHistoryPage(); } catch (e) {}
+        }
+
+        // Shift history
+        if (checked.includes('shift_history')) {
+            itShiftHistory = [];
+            try { persistItShiftHistory(); } catch (e) {}
+        }
+
+        // Ensure remote docs reflect deletions where applicable
+        if (isRemoteSyncActive()) {
+            try {
+                // Clear remote profiles if requested (will keep only current admin)
+                if (checked.includes('it_staffs')) {
+                    const p = getStoredStaffProfiles();
+                    await syncProfilesToRemote(p, { updatedBy: currentAdmin });
+                }
+                if (checked.includes('pcs') || checked.includes('inventory')) {
+                    await firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc).set({ pcData: {} }, { merge: false });
+                }
+                if (checked.includes('modification_history') || checked.includes('it_activities')) {
+                    await firestoreDb.collection(FIREBASE_HISTORY_DOC.collection).doc(FIREBASE_HISTORY_DOC.doc).set({ history: [] }, { merge: false });
+                }
+                if (checked.includes('shift_history')) {
+                    await firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc).set({ shiftHistory: [] }, { merge: false });
+                }
+                if (checked.includes('branches')) {
+                    try { await firestoreDb.collection('sharedState').doc('homeEditContent').set({ homeEdit: DEFAULT_HOME_EDIT_CONTENT }, { merge: false }); } catch (e) {}
+                }
+            } catch (e) { console.error('SuperAdmin delete remote ops failed', e); }
+        }
+
+        toastNotice('success', 'Delete complete', 'Selected datasets were cleared.');
+    } catch (e) {
+        console.error('SuperAdmin delete failed', e);
+        toastNotice('error', 'Delete failed', 'An error occurred while deleting datasets. Check console.');
+    } finally {
+        try { closeSuperAdminDeleteModal(); } catch (e) {}
+        try { updateNavVisibility(); } catch (e) {}
+        try { renderITStaffProfileGrid(); } catch (e) {}
+        try { renderInventoryReportView(); } catch (e) {}
+        try { refreshITTrackerActivitiesModal(); } catch (e) {}
+    }
 }
 
 function showUserListsPage() {
@@ -1865,7 +2167,7 @@ function updateUserDirectoryActions() {
     const currentRole = getCurrentAdminProfile()?.role || '';
     const addRoleButton = document.getElementById('addRoleButton');
     const deleteRoleButton = document.getElementById('deleteRoleButton');
-    const isManager = normalizeRole(currentRole) === 'it manager';
+    const isManager = normalizeRole(currentRole) === 'it manager' || isSuperAdminUser(getCurrentAdminKey());
     if (addRoleButton) {
         addRoleButton.style.display = isManager ? 'inline-flex' : 'none';
     }
@@ -1924,7 +2226,7 @@ function deleteSelectedRole() {
 function renderUserListsTable() {
     const tableBody = document.getElementById('userListsTableBody');
     if (!tableBody) return;
-    const storedProfiles = getStoredStaffProfiles();
+    const storedProfiles = getVisibleStaffProfiles(true);
     const profiles = Object.entries(storedProfiles)
         .map(([key, profile]) => ({ key, profile }))
         .sort((a, b) => {
@@ -1974,8 +2276,9 @@ function renderUserListsTable() {
 
         const actionButtons = [];
         const normalizedEffectiveRole = normalizeRole(effectiveRole);
+        const currentIsSuperAdmin = isSuperAdminUser(effectiveKey);
         if (!isSelf) {
-            if (normalizedEffectiveRole === 'it manager') {
+            if (normalizedEffectiveRole === 'it manager' || currentIsSuperAdmin) {
                 if (!isDisabled) {
                     actionButtons.push(`<button type="button" class="secondary-btn" style="padding:5px 10px; font-size:12px;" data-action="disable" data-staff="${profileKey}" onclick="queueDisableStaff('${profileKey}')" ${canDisable ? '' : 'disabled'}>Disable</button>`);
                     actionButtons.push(`<button type="button" class="delete-btn" style="padding:5px 10px; font-size:12px;" data-action="delete" data-staff="${profileKey}" onclick="deleteStaffProfile('${profileKey}')" ${canDelete ? '' : 'disabled'}>Delete</button>`);
@@ -1994,7 +2297,7 @@ function renderUserListsTable() {
                     }
                 }
             }
-            if (normalizedEffectiveRole === 'it manager') {
+            if (normalizedEffectiveRole === 'it manager' || currentIsSuperAdmin) {
                 actionButtons.push(`<button type="button" class="add-btn promote-btn" data-staff="${profileKey}" data-action="promote" style="padding:5px 10px; font-size:12px;">Promote</button>`);
                 actionButtons.push(`<button type="button" class="secondary-btn demote-btn" data-staff="${profileKey}" data-action="demote" style="padding:5px 10px; font-size:12px;">Demote</button>`);
             }
@@ -2071,26 +2374,26 @@ function getRoleAccess(roleName) {
     return definitions[normalizeRole(roleName)]?.access || {};
 }
 
-function canDisableProfile(actorRole, targetRole) {
+function canDisableProfile(actorRole, targetRole, actorKey = '') {
     const actor = normalizeRole(actorRole);
     const target = normalizeRole(targetRole);
-    if (actor === 'it manager') return true;
-    if (target === 'it manager') return false;
+    if (actor === 'it manager' || isSuperAdminUser(actorKey)) return true;
+    if (target === 'it manager' && !isSuperAdminUser(actorKey)) return false;
     return getRoleAccess(actorRole).disable === true && isActorHigherRankThanTarget(actorRole, targetRole);
 }
 
-function canEnableProfile(actorRole, targetRole) {
+function canEnableProfile(actorRole, targetRole, actorKey = '') {
     const actor = normalizeRole(actorRole);
     const target = normalizeRole(targetRole);
-    if (actor === 'it manager') return true;
-    if (target === 'it manager') return false;
+    if (actor === 'it manager' || isSuperAdminUser(actorKey)) return true;
+    if (target === 'it manager' && !isSuperAdminUser(actorKey)) return false;
     return getRoleAccess(actorRole).enable === true && isActorHigherRankThanTarget(actorRole, targetRole);
 }
 
-function canDeleteProfile(actorRole, targetRole) {
+function canDeleteProfile(actorRole, targetRole, actorKey = '') {
     const actor = normalizeRole(actorRole);
-    if (actor === 'it manager') return true;
-    if (normalizeRole(targetRole) === 'it manager') return false;
+    if (actor === 'it manager' || isSuperAdminUser(actorKey)) return true;
+    if (normalizeRole(targetRole) === 'it manager' && !isSuperAdminUser(actorKey)) return false;
     return getRoleAccess(actorRole).delete === true && isActorHigherRankThanTarget(actorRole, targetRole);
 }
 
@@ -2098,7 +2401,7 @@ let pendingRoleChange = null;
 
 function openStaffRoleChangeModal(staffId, actionType) {
     const currentRole = getCurrentAdminProfile()?.role || '';
-    if (normalizeRole(currentRole) !== 'it manager') {
+    if (normalizeRole(currentRole) !== 'it manager' && !isSuperAdminUser(getCurrentAdminKey())) {
         toastNotice('warning', 'Access denied', 'Only IT Manager may change staff roles.');
         return;
     }
@@ -2184,11 +2487,11 @@ function runRoleChangeDiagnostics() {
     }
 }
 
-function canModifyProfile(actorRole, targetRole) {
+function canModifyProfile(actorRole, targetRole, actorKey = '') {
     const actor = normalizeRole(actorRole);
-    if (actor === 'it manager') return true;
+    if (actor === 'it manager' || isSuperAdminUser(actorKey)) return true;
     if (!actorRole || !targetRole) return false;
-    if (normalizeRole(targetRole) === 'it manager') return false;
+    if (normalizeRole(targetRole) === 'it manager' && !isSuperAdminUser(actorKey)) return false;
     return getRoleAccess(actorRole).editProfiles === true && isActorHigherRankThanTarget(actorRole, targetRole);
 }
 
@@ -2388,8 +2691,8 @@ function moveProfileCarousel(direction) {
 function renderITStaffProfileGrid() {
     const grid = document.getElementById('profileGrid');
     const countEl = document.getElementById('homeStaffCount');
-    // Exclude disabled profiles from the home roster
-    const profiles = Object.values(getStoredStaffProfiles()).filter(p => !p.disabled);
+    // Exclude disabled profiles and hide superadmin ghost from the home roster
+    const profiles = Object.values(getVisibleStaffProfiles());
     if (!grid) return;
 
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -3347,12 +3650,15 @@ function showITTrackerPage() {
 function updateITTrackerHistoryAccess() {
     const logBtn = document.getElementById('itTrackerLogHistoryBtn');
     const activitiesBtn = document.getElementById('itTrackerActivitiesBtn');
+    const currentProfile = getCurrentAdminProfile();
+    const currentIsSuperAdmin = isSuperAdminUser(getCurrentAdminKey());
     if (logBtn) {
-        const isAli = getCurrentAdminKey() === 'ali';
+        const isAli = getCurrentAdminKey() === 'ali' || currentProfile?.superAdmin === true || currentIsSuperAdmin;
         logBtn.classList.toggle('hidden', !isAli);
     }
     if (activitiesBtn) {
-        activitiesBtn.classList.toggle('hidden', normalizeRole(getCurrentAdminProfile()?.role || '') !== 'it manager');
+        const role = normalizeRole(currentProfile?.role || '');
+        activitiesBtn.classList.toggle('hidden', !(role === 'it manager' || currentIsSuperAdmin));
     }
 }
 
@@ -3660,7 +3966,7 @@ function updateITTrackerFields() {
     const isSelf = currentUser && currentUser === selectedStaff;
     const canEditPeer = selectedProfile && currentUser && currentUser !== selectedStaff && canModifyProfile(currentRole, selectedProfile.role);
     const canEditProfile = isSelf || canEditPeer;
-    const canEditRole = normalizeRole(currentRole) === 'it manager';
+    const canEditRole = (normalizeRole(currentRole) === 'it manager' || isSuperAdminUser(getCurrentAdminKey()));
 
     if (nameInput) nameInput.disabled = !canEditProfile;
     if (roleInput) roleInput.disabled = !canEditRole;
@@ -3865,7 +4171,7 @@ async function saveITProfileDetails() {
     }
 
     const desiredRole = roleInput.value.trim();
-    const updatedRole = normalizeRole(currentRole) === 'it manager' ? desiredRole : selectedProfile.role;
+    const updatedRole = (normalizeRole(currentRole) === 'it manager' || isSuperAdminUser(getCurrentAdminKey())) ? desiredRole : selectedProfile.role;
 
     if (!nameInput.value.trim() || !updatedRole) {
         toastNotice('warning', 'Input Required', 'Name and role are required for profile updates.');
@@ -4003,8 +4309,8 @@ async function addNewITStaff() {
         return;
     }
 
-    if (normalizeRole(role) === 'it manager') {
-        toastNotice('warning', 'Invalid Role', 'A new staff profile cannot be assigned the IT Manager role.');
+    if (normalizeRole(role) === 'it manager' && !canAssignITManagerRole(getCurrentAdminProfile()?.role || '')) {
+        toastNotice('warning', 'Forbidden Role', 'Only Ali or Super Admin can assign the IT Manager role.');
         return;
     }
 
@@ -4153,8 +4459,8 @@ function updateITProfilesDisplay() {
     const container = document.getElementById('staffProfilesHomeContainer');
     if (!container) return;
 
-    // Fetch live items
-    const rawProfiles = getStoredStaffProfiles() || {};
+    // Fetch live items (exclude superadmin ghost)
+    const rawProfiles = getVisibleStaffProfiles(true) || {};
     let profiles = Object.values(rawProfiles);
 
     // 1. FIXED LAYOUT: Sort profiles so Sir Ali always comes first
@@ -4350,9 +4656,8 @@ function openStaffFeedbackForm() {
 
     departmentInput.value = loggedInProfile?.role || '';
     setFeedbackStarRating(0);
-    document.querySelectorAll('input[name="feedbackQuestion1"]').forEach(el => el.checked = false);
-    document.querySelectorAll('input[name="feedbackQuestion2"]').forEach(el => el.checked = false);
-    document.querySelectorAll('input[name="feedbackQuestion3"]').forEach(el => el.checked = false);
+    renderFeedbackQuestionChoices();
+    document.querySelectorAll('input[type="radio"][name^="feedbackQuestion"]').forEach(el => { el.checked = false; });
     document.getElementById('feedbackCommentText').value = '';
     
     const feedbackModal = document.getElementById('staffFeedbackModalOverlay');
@@ -4365,14 +4670,29 @@ function closeStaffFeedbackForm() {
     currentStaffForFeedback = '';
 }
 
+function isSuperAdminUser(actorKeyOrProfile) {
+    if (typeof actorKeyOrProfile === 'string') {
+        return actorKeyOrProfile === 'superadmin';
+    }
+    const profile = actorKeyOrProfile || getCurrentAdminProfile();
+    return !!(profile && (profile.superAdmin === true || profile.id === 'superadmin' || (profile.username || '').toLowerCase() === 'superadminbhf'));
+}
+
 function canCreateStaff(actorRole) {
-    if (normalizeRole(actorRole) === 'it manager') return true;
-    return getRoleAccess(actorRole).addStaff === true;
+    const currentProfile = getCurrentAdminProfile();
+    if (!currentProfile || currentProfile.disabled) return false;
+    return true;
+}
+
+function canAssignITManagerRole(actorRole) {
+    return normalizeRole(actorRole) === 'it manager' || isSuperAdminUser(getCurrentAdminKey());
 }
 
 function openAddStaffModal() {
     const currentRole = getCurrentAdminProfile()?.role || '';
+    console.debug('[openAddStaffModal] entered', { currentRole, currentKey: getCurrentAdminKey(), currentProfile: getCurrentAdminProfile() });
     if (!canCreateStaff(currentRole)) {
+        console.debug('[openAddStaffModal] blocked by canCreateStaff', { currentRole, currentKey: getCurrentAdminKey() });
         toastNotice('warning', 'Access denied', 'You do not have permission to add new staff.');
         return;
     }
@@ -4380,6 +4700,9 @@ function openAddStaffModal() {
     const overlay = document.getElementById('addStaffModalOverlay');
     if (overlay) {
         overlay.classList.remove('hidden');
+        console.debug('[openAddStaffModal] modal opened');
+    } else {
+        console.debug('[openAddStaffModal] modal element not found');
     }
 }
 
@@ -4449,38 +4772,37 @@ function submitStaffFeedback() {
     const branch = branchSelect?.value || '';
     const department = document.getElementById('feedbackDepartmentInput').value.trim();
     const ratingValue = Number(document.getElementById('feedbackRatingInput').value || '0');
-    // For the new two-choice questions we map any selected value to either 'Satisfied' or 'Dissatisfied'
-    const answer1 = (document.querySelector('input[name="feedbackQuestion1"]:checked')?.value || '').trim();
-    const answer2 = (document.querySelector('input[name="feedbackQuestion2"]:checked')?.value || '').trim();
-    const answer3 = (document.querySelector('input[name="feedbackQuestion3"]:checked')?.value || '').trim();
     const comment = document.getElementById('feedbackCommentText').value.trim();
-    
+    const questions = getStoredFeedbackQuestions();
+    const answers = questions.map((_, index) => {
+        return (document.querySelector(`input[name="feedbackQuestion${index}"]:checked`)?.value || '').trim();
+    });
+
     const loggedInUserKey = adminUserKey || sessionStorage.getItem('adminUserKey');
     const branchRequired = !loggedInUserKey;
-    if ((branchRequired && !branch) || !department || ratingValue < 1 || !answer1 || !answer2 || !answer3 || !comment) {
-        const missingParts = [];
-        if (branchRequired && !branch) missingParts.push('branch');
-        if (!department) missingParts.push('department');
-        if (ratingValue < 1) missingParts.push('rating');
-        if (!answer1 || !answer2 || !answer3) missingParts.push('all questions');
-        if (!comment) missingParts.push('feedback message');
+    const missingParts = [];
+    if (branchRequired && !branch) missingParts.push('branch');
+    if (!department) missingParts.push('department');
+    if (ratingValue < 1) missingParts.push('rating');
+    if (answers.some(ans => !ans)) missingParts.push('all questions');
+    if (!comment) missingParts.push('feedback message');
+    if (missingParts.length > 0) {
         toastNotice('warning', 'Incomplete', `Please fill in the ${missingParts.join(', ')}.`);
         return;
     }
-    
+
     const submittedBy = loggedInUserKey || 'Anonymous';
-    const questions = getStoredFeedbackQuestions();
     const profiles = getStoredStaffProfiles();
     const loggedInProfile = loggedInUserKey ? profiles[loggedInUserKey] : null;
     const storedBranch = branch || loggedInProfile?.location || loggedInProfile?.username || loggedInProfile?.name || '';
-    
+
     const feedback = {
         id: `feedback-${Date.now()}`,
         staffKey: currentStaffForFeedback,
         branch: storedBranch,
         department: department,
         rating: ratingValue,
-        answers: [answer1, answer2, answer3],
+        answers: answers,
         questions: questions,
         comment: comment,
         submittedAt: new Date().toISOString(),
@@ -4830,16 +5152,24 @@ function startMonitoringCurrentUserStatus(staffKey) {
             if (!remoteData || typeof remoteData.profiles !== 'object') return;
             
             const currentUserProfile = remoteData.profiles[staffKey];
-            
-            // If user profile doesn't exist anymore (deleted), force logout
+            // If user profile doesn't exist remotely, check local copy first to avoid accidental self-logout
+            const localProfile = (function(){ try { return getStoredStaffProfiles()[staffKey] || null; } catch(e){ return null; } })();
             if (!currentUserProfile || !currentUserProfile.id) {
-                console.warn('[Monitor] Current user profile was deleted, forcing logout');
+                if (localProfile && localProfile.id) {
+                    console.debug('[Monitor] Remote profile missing but local exists — preserving session for', staffKey);
+                    return;
+                }
+                console.warn('[Monitor] Current user profile was deleted (remote+local empty), forcing logout');
                 forceLogoutDueToStatusChange('Your account has been permanently deleted.');
                 return;
             }
-            
-            // If user profile is now disabled, force logout
+
+            // If user profile is now disabled, avoid forcing logout for a local super admin
             if (currentUserProfile.disabled === true) {
+                if (localProfile && localProfile.superAdmin) {
+                    console.debug('[Monitor] Remote profile disabled but local is superAdmin — preserving session for', staffKey);
+                    return;
+                }
                 console.warn('[Monitor] Current user profile was disabled, forcing logout');
                 forceLogoutDueToStatusChange('Your account has been disabled and you have been logged out.');
                 return;
