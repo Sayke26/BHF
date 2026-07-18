@@ -333,10 +333,20 @@ const FIREBASE_SHIFT_DOC = {
     collection: 'sharedState',
     doc: 'itShiftHistory'
 };
+const FIREBASE_ANALYSIS_DOC = {
+    collection: 'sharedState',
+    doc: 'analysisDeleteState'
+};
+const FIREBASE_FEEDBACK_DOC = {
+    collection: 'sharedState',
+    doc: 'staffFeedbacks'
+};
 let firebaseApp = null;
 let firestoreDb = null;
 let remoteSyncApplying = false;
 let remoteAnnouncementsApplying = false;
+let analysisRemoteApplying = false;
+let staffFeedbackRemoteApplying = false;
 let profileStorageSyncSuppressed = false;
 let profileSyncRevision = Number(localStorage.getItem('itStaffProfilesRevision') || '0');
 let profileSyncLastUpdatedBy = null;
@@ -409,6 +419,25 @@ function isRemoteSyncActive() {
                     try { /* no-op */ } catch (e) {}
                     if (isRemoteSyncActive() && !remoteSyncApplying) {
                         try { syncShiftHistoryToRemote(JSON.parse(value || '[]')); } catch (e) { console.warn('syncShiftHistoryToRemote failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'analysisDeleteState') {
+                    _hookGuard = true;
+                    try { const state = JSON.parse(value || '{}'); restoreAnalysisDeleteState(state); } catch (e) { console.warn('Failed to parse analysis delete state from localStorage', e); }
+                    if (isRemoteSyncActive() && !analysisRemoteApplying) {
+                        try { pushAnalysisDeleteStateToCloud().catch(() => {}); } catch (e) { console.warn('pushAnalysisDeleteStateToCloud failed from hook', e); }
+                    }
+                    _hookGuard = false;
+                    return;
+                }
+                if (key === 'staffFeedbacks') {
+                    _hookGuard = true;
+                    let parsed = [];
+                    try { parsed = JSON.parse(value || '[]'); } catch (e) { console.warn('Failed to parse staffFeedbacks from localStorage', e); }
+                    if (isRemoteSyncActive() && !staffFeedbackRemoteApplying) {
+                        try { syncStaffFeedbacksToRemote(parsed); } catch (e) { console.warn('syncStaffFeedbacksToRemote failed from hook', e); }
                     }
                     _hookGuard = false;
                     return;
@@ -619,6 +648,58 @@ async function initializeRemoteSync() {
             } catch (e) { console.warn('history initial sync check failed', e); }
 
             try {
+                const analysisRefInit = firestoreDb.collection(FIREBASE_ANALYSIS_DOC.collection).doc(FIREBASE_ANALYSIS_DOC.doc);
+                const analysisSnap = await analysisRefInit.get();
+                if (analysisSnap.exists) {
+                    const data = analysisSnap.data();
+                    if (data && typeof data.analysisDeleteState === 'object') {
+                        analysisRemoteApplying = true;
+                        try {
+                            restoreAnalysisDeleteState(data.analysisDeleteState);
+                            localStorage.setItem('analysisDeleteState', JSON.stringify(data.analysisDeleteState));
+                        } finally {
+                            analysisRemoteApplying = false;
+                        }
+                    }
+                } else {
+                    const stored = localStorage.getItem('analysisDeleteState');
+                    if (stored) {
+                        try {
+                            const localState = JSON.parse(stored);
+                            if (localState && typeof localState === 'object') {
+                                await analysisRefInit.set({ analysisDeleteState: localState }, { merge: false });
+                                console.info('Migrated local analysis delete state → Firestore sharedState/analysisDeleteState');
+                            }
+                        } catch (e) { console.warn('analysis delete state migration failed', e); }
+                    }
+                }
+            } catch (e) { console.warn('analysis delete state initial sync check failed', e); }
+
+            try {
+                const feedbackRefInit = firestoreDb.collection(FIREBASE_FEEDBACK_DOC.collection).doc(FIREBASE_FEEDBACK_DOC.doc);
+                const feedbackSnap = await feedbackRefInit.get();
+                if (feedbackSnap.exists) {
+                    const data = feedbackSnap.data();
+                    if (data && Array.isArray(data.staffFeedbacks)) {
+                        staffFeedbackRemoteApplying = true;
+                        try {
+                            localStorage.setItem('staffFeedbacks', JSON.stringify(data.staffFeedbacks));
+                        } finally {
+                            staffFeedbackRemoteApplying = false;
+                        }
+                    }
+                } else {
+                    try {
+                        const localList = JSON.parse(localStorage.getItem('staffFeedbacks') || '[]');
+                        if (Array.isArray(localList) && localList.length > 0) {
+                            await feedbackRefInit.set({ staffFeedbacks: localList }, { merge: false });
+                            console.info('Migrated local staff feedbacks → Firestore sharedState/staffFeedbacks');
+                        }
+                    } catch (e) { console.warn('staff feedback migration failed', e); }
+                }
+            } catch (e) { console.warn('staffFeedbacks initial sync check failed', e); }
+
+            try {
                 const roleRefInit = firestoreDb.collection(FIREBASE_ROLE_DOC.collection).doc(FIREBASE_ROLE_DOC.doc);
                 const roleSnap = await roleRefInit.get();
                 if (roleSnap.exists) {
@@ -737,6 +818,39 @@ async function initializeRemoteSync() {
                 }
             }, (err) => console.error('History pipeline subscription error:', err));
         } catch (e) { console.warn('History dynamic registration hook blocked:', e); }
+
+        try {
+            const analysisRef = firestoreDb.collection(FIREBASE_ANALYSIS_DOC.collection).doc(FIREBASE_ANALYSIS_DOC.doc);
+            analysisRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || typeof data.analysisDeleteState !== 'object') return;
+                analysisRemoteApplying = true;
+                try {
+                    restoreAnalysisDeleteState(data.analysisDeleteState);
+                    localStorage.setItem('analysisDeleteState', JSON.stringify(data.analysisDeleteState));
+                    if (typeof renderAnalysisView === 'function') renderAnalysisView();
+                } finally {
+                    analysisRemoteApplying = false;
+                }
+            }, (err) => console.error('Analysis delete state snapshot subscription error:', err));
+        } catch (e) { console.warn('Analysis delete state listener not attached:', e); }
+
+        try {
+            const feedbackRef = firestoreDb.collection(FIREBASE_FEEDBACK_DOC.collection).doc(FIREBASE_FEEDBACK_DOC.doc);
+            feedbackRef.onSnapshot((snap) => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!data || !Array.isArray(data.staffFeedbacks)) return;
+                staffFeedbackRemoteApplying = true;
+                try {
+                    localStorage.setItem('staffFeedbacks', JSON.stringify(data.staffFeedbacks));
+                    try { renderStaffFeedbackHistoryPage(); } catch (e) {}
+                } finally {
+                    staffFeedbackRemoteApplying = false;
+                }
+            }, (err) => console.error('Staff feedback snapshot subscription error:', err));
+        } catch (e) { console.warn('Staff feedback listener not attached:', e); }
 
         try {
             const roleRef = firestoreDb.collection(FIREBASE_ROLE_DOC.collection).doc(FIREBASE_ROLE_DOC.doc);
@@ -1002,6 +1116,101 @@ async function syncShiftHistoryToRemote(history) {
     } catch (e) {
         console.error('Failed to sync shift history to remote:', e);
         updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
+
+function serializeAnalysisDeleteState() {
+    return {
+        years: Array.from(deletedAnalysisYears),
+        branches: Object.fromEntries(Object.entries(deletedAnalysisBranches).map(([year, set]) => [year, Array.from(set)])),
+        monthRemovals: Object.fromEntries(Object.entries(deletedAnalysisMonthRemovals).map(([year, entry]) => [year, {
+            all: Array.from(entry.all || []),
+            branches: Object.fromEntries(Object.entries(entry.branches || {}).map(([branch, set]) => [branch, Array.from(set)]))
+        }]))
+    };
+}
+
+function restoreAnalysisDeleteState(state) {
+    deletedAnalysisYears = new Set(Array.isArray(state?.years) ? state.years : []);
+    deletedAnalysisBranches = {};
+    deletedAnalysisMonthRemovals = {};
+    if (state?.branches && typeof state.branches === 'object') {
+        Object.entries(state.branches).forEach(([year, branchList]) => {
+            deletedAnalysisBranches[year] = new Set(Array.isArray(branchList) ? branchList : []);
+        });
+    }
+    if (state?.monthRemovals && typeof state.monthRemovals === 'object') {
+        Object.entries(state.monthRemovals).forEach(([year, entry]) => {
+            deletedAnalysisMonthRemovals[year] = {
+                all: new Set(Array.isArray(entry?.all) ? entry.all : []),
+                branches: {}
+            };
+            if (entry?.branches && typeof entry.branches === 'object') {
+                Object.entries(entry.branches).forEach(([branch, months]) => {
+                    deletedAnalysisMonthRemovals[year].branches[branch] = new Set(Array.isArray(months) ? months : []);
+                });
+            }
+        });
+    }
+}
+
+function persistAnalysisDeleteState() {
+    const state = serializeAnalysisDeleteState();
+    try {
+        localStorage.setItem('analysisDeleteState', JSON.stringify(state));
+    } catch (e) {
+        console.warn('Failed to persist analysis delete state to localStorage', e);
+    }
+    if (isRemoteSyncActive() && !analysisRemoteApplying) {
+        pushAnalysisDeleteStateToCloud().catch(e => console.warn('Failed to push analysis delete state to Firestore', e));
+    }
+}
+
+async function pushAnalysisDeleteStateToCloud() {
+    if (!isRemoteSyncActive()) return;
+    try {
+        await firestoreDb.collection(FIREBASE_ANALYSIS_DOC.collection).doc(FIREBASE_ANALYSIS_DOC.doc).set({ analysisDeleteState: serializeAnalysisDeleteState() }, { merge: false });
+    } catch (e) {
+        console.error('Failed to sync analysis delete state to remote:', e);
+    }
+}
+
+function loadAnalysisDeleteStateFromLocal() {
+    try {
+        const raw = localStorage.getItem('analysisDeleteState');
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+            restoreAnalysisDeleteState(data);
+        }
+    } catch (e) {
+        console.warn('Failed to load analysis delete state from localStorage', e);
+    }
+}
+
+async function syncStaffFeedbacksToRemote(feedbacks) {
+    if (!firestoreDb || !Array.isArray(feedbacks)) {
+        console.warn('[RemoteSync] syncStaffFeedbacksToRemote skipped', { firestoreDbExists: !!firestoreDb, feedbacksType: typeof feedbacks });
+        return;
+    }
+
+    try {
+        const docRef = firestoreDb.collection(FIREBASE_FEEDBACK_DOC.collection).doc(FIREBASE_FEEDBACK_DOC.doc);
+        await docRef.set({ staffFeedbacks: feedbacks }, { merge: false });
+    } catch (e) {
+        console.error('Failed to sync staff feedbacks to remote:', e);
+        updateRemoteSyncStatusDisplay('error', e.message || String(e));
+    }
+}
+
+function persistStaffFeedbacks(feedbacks) {
+    try {
+        localStorage.setItem('staffFeedbacks', JSON.stringify(feedbacks));
+    } catch (e) {
+        console.warn('Failed to persist staff feedbacks locally', e);
+    }
+    if (isRemoteSyncActive() && !staffFeedbackRemoteApplying) {
+        syncStaffFeedbacksToRemote(feedbacks).catch(e => console.warn('Failed to push staff feedbacks to Firestore', e));
     }
 }
 
@@ -2044,6 +2253,7 @@ function updateAdminProfileMenu() {
 }
 
 function openSuperAdminDeleteModal() {
+    initializeSuperAdminDeleteModal();
     document.getElementById('superAdminDeleteModalOverlay')?.classList.remove('hidden');
 }
 
@@ -2051,14 +2261,403 @@ function closeSuperAdminDeleteModal() {
     document.getElementById('superAdminDeleteModalOverlay')?.classList.add('hidden');
 }
 
+function initializeSuperAdminDeleteModal() {
+    const overlay = document.getElementById('superAdminDeleteModalOverlay');
+    if (!overlay) return;
+
+    overlay.querySelectorAll('.superadmin-delete-target').forEach(input => input.checked = false);
+    document.getElementById('superAdminDeleteChoicePanel').style.display = 'none';
+    const choiceMessage = document.getElementById('superAdminDeleteChoiceMessage');
+    if (choiceMessage) choiceMessage.textContent = '';
+    document.getElementById('superAdminDeletePcsOptions').style.display = 'none';
+    document.getElementById('superAdminDeleteInventoryOptions').style.display = 'none';
+    document.getElementById('superAdminDeleteAnalysisOptions').style.display = 'none';
+    document.getElementById('superAdminDeleteHistoryOptions').style.display = 'none';
+    const allBranchesCheckbox = document.getElementById('superAdminDeletePcsAllBranches');
+    if (allBranchesCheckbox) allBranchesCheckbox.checked = false;
+    toggleSuperAdminDeleteHistoryScope('date');
+
+    const branchList = document.getElementById('superAdminDeleteBranchList');
+    if (branchList) {
+        branchList.innerHTML = branches.map(branch => `
+            <label style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px; cursor:pointer;">
+                <input type="checkbox" class="superAdminDeleteBranchCheckbox" value="${branch}" />
+                ${branch}
+            </label>
+        `).join('');
+    }
+
+    const analysisYearSelect = document.getElementById('superAdminDeleteAnalysisYearSelect');
+    if (analysisYearSelect) {
+        analysisYearSelect.innerHTML = analysisYears.map(year => `<option value="${year}">${year}</option>`).join('');
+        analysisYearSelect.value = String(analysisYears[analysisYears.length - 1] || new Date().getFullYear());
+    }
+
+    const analysisBranchList = document.getElementById('superAdminDeleteAnalysisBranchList');
+    if (analysisBranchList) {
+        analysisBranchList.innerHTML = branches.map(branch => `
+            <label style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px; cursor:pointer;">
+                <input type="checkbox" class="superAdminDeleteAnalysisBranchCheckbox" value="${branch}" />
+                ${branch}
+            </label>
+        `).join('');
+    }
+    const allAnalysisBranchesCheckbox = document.getElementById('superAdminDeleteAnalysisAllBranches');
+    if (allAnalysisBranchesCheckbox) allAnalysisBranchesCheckbox.checked = false;
+
+    const analysisMonthList = document.getElementById('superAdminDeleteAnalysisMonthList');
+    if (analysisMonthList) {
+        analysisMonthList.innerHTML = analysisMonths.slice(1).map((month, idx) => `
+            <label style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px; cursor:pointer;">
+                <input type="checkbox" class="superAdminDeleteAnalysisMonthCheckbox" value="${idx + 1}" />
+                ${month}
+            </label>
+        `).join('');
+    }
+    const allAnalysisMonthsCheckbox = document.getElementById('superAdminDeleteAnalysisAllMonths');
+    if (allAnalysisMonthsCheckbox) allAnalysisMonthsCheckbox.checked = false;
+
+    const inventoryConditionIds = ['warning','critical','offline','highTemp','lowStorage','replacement'];
+    inventoryConditionIds.forEach(id => {
+        const checkbox = document.getElementById(`superAdminDeleteInventoryCondition_${id}`);
+        if (checkbox) checkbox.checked = false;
+    });
+    const allInv = document.getElementById('superAdminDeleteInventoryAllConditions');
+    if (allInv) allInv.checked = false;
+
+    const historyYearSelect = document.getElementById('superAdminDeleteHistoryYearSelect');
+    if (historyYearSelect) {
+        const now = new Date();
+        const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3];
+        historyYearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
+        historyYearSelect.value = String(now.getFullYear());
+    }
+}
+
+function openSuperAdminDeleteChoice(type) {
+    const overlay = document.getElementById('superAdminDeleteModalOverlay');
+    if (!overlay) return;
+    const checkbox = overlay.querySelector(`.superadmin-delete-target[value="${type}"]`);
+    if (checkbox) checkbox.checked = true;
+    renderSuperAdminDeleteChoicePanel(type);
+    const panel = document.getElementById('superAdminDeleteChoicePanel');
+    if (panel) {
+        panel.style.display = 'block';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function closeSuperAdminDeleteChoice() {
+    const panel = document.getElementById('superAdminDeleteChoicePanel');
+    if (panel) panel.style.display = 'none';
+}
+
+function renderSuperAdminDeleteChoicePanel(type) {
+    const title = document.getElementById('superAdminDeleteChoiceTitle');
+    const subtitle = document.getElementById('superAdminDeleteChoiceSubtitle');
+    const message = document.getElementById('superAdminDeleteChoiceMessage');
+    const pcsOptions = document.getElementById('superAdminDeletePcsOptions');
+    const inventoryOptions = document.getElementById('superAdminDeleteInventoryOptions');
+    const analysisOptions = document.getElementById('superAdminDeleteAnalysisOptions');
+    const historyOptions = document.getElementById('superAdminDeleteHistoryOptions');
+
+    if (pcsOptions) pcsOptions.style.display = 'none';
+    if (inventoryOptions) inventoryOptions.style.display = 'none';
+    if (analysisOptions) analysisOptions.style.display = 'none';
+    if (historyOptions) historyOptions.style.display = 'none';
+
+    if (title) title.textContent = 'Choice options';
+    if (subtitle) subtitle.textContent = 'Configure the selected delete action.';
+    if (message) message.textContent = '';
+
+    switch (type) {
+        case 'pcs':
+            if (title) title.textContent = 'PC Deletion by Branch';
+            if (subtitle) subtitle.textContent = 'Select one or more branches to remove PCs from.';
+            if (pcsOptions) pcsOptions.style.display = 'block';
+            break;
+        case 'analysis':
+            if (title) title.textContent = 'Analysis Deletion';
+            if (subtitle) subtitle.textContent = 'Choose year, branch, and month scope to remove analysis history.';
+            if (analysisOptions) analysisOptions.style.display = 'block';
+            break;
+        case 'inventory':
+            if (title) title.textContent = 'Inventory Data Deletion';
+            if (subtitle) subtitle.textContent = 'Choose inventory condition groups to remove, or delete all inventory.';
+            if (inventoryOptions) inventoryOptions.style.display = 'block';
+            break;
+        case 'branches':
+            if (title) title.textContent = 'Branch Customizations Reset';
+            if (subtitle) subtitle.textContent = 'Reset branch home customization content to default for all branches.';
+            if (message) message.textContent = 'This will remove any customized branch home edit content and restore the default text.';
+            break;
+        case 'modification_history':
+            if (title) title.textContent = 'Modification History Deletion';
+            if (subtitle) subtitle.textContent = 'Choose a date, month, or year to clear modification history entries.';
+            if (historyOptions) historyOptions.style.display = 'block';
+            break;
+        case 'it_activities':
+            if (title) title.textContent = 'IT Activities Deletion';
+            if (subtitle) subtitle.textContent = 'Choose a date, month, or year to clear IT activities entries.';
+            if (historyOptions) historyOptions.style.display = 'block';
+            break;
+        case 'shift_history':
+            if (title) title.textContent = 'Shift History Deletion';
+            if (subtitle) subtitle.textContent = 'Choose a date, month, or year to clear shift log entries.';
+            if (historyOptions) historyOptions.style.display = 'block';
+            break;
+        case 'staff_feedbacks':
+            if (title) title.textContent = 'Feedback History Deletion';
+            if (subtitle) subtitle.textContent = 'This removes all stored staff feedback history.';
+            break;
+        default:
+            if (title) title.textContent = 'Choice options';
+            if (subtitle) subtitle.textContent = 'Configure the selected delete action.';
+            break;
+    }
+}
+
+function toggleSuperAdminDeletePcsOptions() {
+    const show = document.getElementById('superAdminDeletePcsCheckbox')?.checked;
+    const options = document.getElementById('superAdminDeletePcsOptions');
+    if (options) options.style.display = show ? 'block' : 'none';
+}
+
+function toggleSuperAdminDeleteAllBranches(checked) {
+    document.querySelectorAll('.superAdminDeleteBranchCheckbox').forEach(cb => { cb.checked = checked; });
+}
+
+function toggleSuperAdminDeleteAnalysisAllBranches(checked) {
+    document.querySelectorAll('.superAdminDeleteAnalysisBranchCheckbox').forEach(cb => { cb.checked = checked; });
+}
+
+function getSelectedSuperAdminDeleteAnalysisBranches() {
+    const allBranches = document.getElementById('superAdminDeleteAnalysisAllBranches')?.checked;
+    const selected = Array.from(document.querySelectorAll('.superAdminDeleteAnalysisBranchCheckbox:checked')).map(el => el.value);
+    if (allBranches || selected.length === branches.length) {
+        return [...branches];
+    }
+    return selected;
+}
+
+function toggleSuperAdminDeleteAnalysisAllMonths(checked) {
+    document.querySelectorAll('.superAdminDeleteAnalysisMonthCheckbox').forEach(cb => { cb.checked = checked; });
+}
+
+function getSelectedSuperAdminDeleteAnalysisMonths() {
+    const allMonths = document.getElementById('superAdminDeleteAnalysisAllMonths')?.checked;
+    const selected = Array.from(document.querySelectorAll('.superAdminDeleteAnalysisMonthCheckbox:checked')).map(el => Number(el.value));
+    if (allMonths || selected.length === analysisMonths.length - 1) {
+        return 'all';
+    }
+    return selected;
+}
+
+function toggleSuperAdminDeleteInventoryAllConditions(checked) {
+    const conditionIds = ['warning','critical','offline','highTemp','lowStorage','replacement'];
+    conditionIds.forEach(id => {
+        const checkbox = document.getElementById(`superAdminDeleteInventoryCondition_${id}`);
+        if (checkbox) checkbox.checked = checked;
+    });
+}
+
+function getSelectedInventoryConditions() {
+    const allSelected = document.getElementById('superAdminDeleteInventoryAllConditions')?.checked;
+    const conditionIds = ['warning','critical','offline','highTemp','lowStorage','replacement'];
+    const selected = conditionIds.filter(id => allSelected || document.getElementById(`superAdminDeleteInventoryCondition_${id}`)?.checked);
+    return selected;
+}
+
+function matchesInventoryDeleteCondition(pc, condition) {
+    const health = pc.health || 'Healthy';
+    const state = pc.state || pc.stateAtReport || 'Active';
+    const temp = Number(pc.temp ?? pc.pcTemp ?? 0);
+    const freeSpace = parseGbValue(pc.freeSpace || '0GB');
+
+    switch (condition) {
+        case 'warning':
+            return health === 'Warning';
+        case 'critical':
+            return health === 'Critical';
+        case 'offline':
+            return state === 'Down';
+        case 'highTemp':
+            return temp >= 70;
+        case 'lowStorage':
+            return freeSpace <= 50;
+        case 'replacement':
+            return health === 'Critical' || freeSpace <= 15 || temp >= 85;
+        default:
+            return false;
+    }
+}
+
+function deleteAnalysisData(year, selectedBranchValues, selectedMonthValues) {
+    const selectedBranches = Array.isArray(selectedBranchValues) ? selectedBranchValues : [selectedBranchValues];
+    const useAllBranches = selectedBranches.length === 0 || selectedBranches.length === branches.length || selectedBranches.includes('all');
+    const selectedMonths = selectedMonthValues === 'all' ? 'all' : Array.isArray(selectedMonthValues) ? selectedMonthValues : [Number(selectedMonthValues)];
+    const useAllMonths = selectedMonths === 'all' || (Array.isArray(selectedMonths) && selectedMonths.length === analysisMonths.length - 1);
+
+    if (useAllMonths) {
+        if (useAllBranches) {
+            deletedAnalysisYears.add(year);
+            return;
+        }
+        deletedAnalysisBranches[year] = deletedAnalysisBranches[year] || new Set();
+        selectedBranches.forEach(branch => deletedAnalysisBranches[year].add(branch));
+        return;
+    }
+
+    const months = Array.isArray(selectedMonths) ? selectedMonths : [];
+    if (!deletedAnalysisMonthRemovals[year]) {
+        deletedAnalysisMonthRemovals[year] = { all: new Set(), branches: {} };
+    }
+
+    if (useAllBranches) {
+        months.forEach(monthValue => deletedAnalysisMonthRemovals[year].all.add(Number(monthValue) - 1));
+    } else {
+        selectedBranches.forEach(branch => {
+            deletedAnalysisMonthRemovals[year].branches[branch] = deletedAnalysisMonthRemovals[year].branches[branch] || new Set();
+            months.forEach(monthValue => deletedAnalysisMonthRemovals[year].branches[branch].add(Number(monthValue) - 1));
+        });
+    }
+}
+
+function applyDeletedAnalysisFilters(year, branchData) {
+    if (deletedAnalysisYears.has(year)) {
+        return [];
+    }
+
+    const removals = deletedAnalysisMonthRemovals[year];
+    return branchData.map(item => {
+        if (deletedAnalysisBranches[year]?.has(item.branch)) {
+            return null;
+        }
+
+        const copy = { ...item, monthlyScore: Array.isArray(item.monthlyScore) ? [...item.monthlyScore] : [] };
+
+        if (removals) {
+            removals.all.forEach(idx => {
+                if (copy.monthlyScore[idx] != null) copy.monthlyScore[idx] = 0;
+            });
+            const branchRemovals = removals.branches[item.branch];
+            if (branchRemovals) {
+                branchRemovals.forEach(idx => {
+                    if (copy.monthlyScore[idx] != null) copy.monthlyScore[idx] = 0;
+                });
+            }
+        }
+
+        return copy;
+    }).filter(Boolean);
+}
+
+function toggleSuperAdminDeleteAnalysisOptions() {
+    const show = document.getElementById('superAdminDeleteAnalysisCheckbox')?.checked;
+    const options = document.getElementById('superAdminDeleteAnalysisOptions');
+    if (options) options.style.display = show ? 'block' : 'none';
+}
+
+function refreshSuperAdminHistoryScopeVisibility() {
+    const show = Boolean(
+        document.getElementById('superAdminDeleteModificationHistoryCheckbox')?.checked ||
+        document.getElementById('superAdminDeleteActivitiesCheckbox')?.checked ||
+        document.getElementById('superAdminDeleteShiftHistoryCheckbox')?.checked
+    );
+    const options = document.getElementById('superAdminDeleteHistoryOptions');
+    if (options) options.style.display = show ? 'block' : 'none';
+}
+
+function toggleSuperAdminDeleteHistoryScope(scope) {
+    const dateContainer = document.getElementById('superAdminDeleteHistoryDate');
+    const monthContainer = document.getElementById('superAdminDeleteHistoryMonth');
+    const yearContainer = document.getElementById('superAdminDeleteHistoryYear');
+
+    if (dateContainer) dateContainer.style.display = scope === 'date' ? 'block' : 'none';
+    if (monthContainer) monthContainer.style.display = scope === 'month' ? 'block' : 'none';
+    if (yearContainer) yearContainer.style.display = scope === 'year' ? 'block' : 'none';
+}
+
+function getSuperAdminDeleteHistoryFilter() {
+    const scopeInput = document.querySelector('input[name="superAdminDeleteHistoryScopeType"]:checked');
+    const scope = scopeInput?.value || 'date';
+    if (scope === 'date') {
+        const value = document.getElementById('superAdminDeleteHistoryDateInput')?.value;
+        if (!value) return null;
+        const target = new Date(value);
+        target.setHours(0, 0, 0, 0);
+        return entry => {
+            const logDate = new Date(entry.timestamp);
+            logDate.setHours(0, 0, 0, 0);
+            return logDate.getTime() === target.getTime();
+        };
+    }
+
+    if (scope === 'month') {
+        const value = document.getElementById('superAdminDeleteHistoryMonthInput')?.value;
+        if (!value) return null;
+        const [year, month] = value.split('-').map(Number);
+        return entry => {
+            const logDate = new Date(entry.timestamp);
+            return logDate.getFullYear() === year && logDate.getMonth() + 1 === month;
+        };
+    }
+
+    if (scope === 'year') {
+        const value = document.getElementById('superAdminDeleteHistoryYearSelect')?.value;
+        if (!value) return null;
+        const year = Number(value);
+        return entry => {
+            const logDate = new Date(entry.timestamp);
+            return logDate.getFullYear() === year;
+        };
+    }
+
+    return null;
+}
+
+function getSelectedSuperAdminDeleteBranches() {
+    const allBranches = document.getElementById('superAdminDeletePcsAllBranches')?.checked;
+    if (allBranches) return [...branches];
+    return Array.from(document.querySelectorAll('.superAdminDeleteBranchCheckbox:checked')).map(el => el.value);
+}
+
 async function performSuperAdminDelete() {
     const overlay = document.getElementById('superAdminDeleteModalOverlay');
     if (!overlay) return;
-    const checked = Array.from(overlay.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+    const checked = Array.from(overlay.querySelectorAll('.superadmin-delete-target[type="checkbox"]:checked')).map(i => i.value);
     if (!checked || checked.length === 0) {
         toastNotice('warning', 'No selection', 'Please select at least one dataset to delete.');
         return;
     }
+
+    const requiresBranchSelection = checked.includes('pcs');
+    const requiresAnalysisSelection = checked.includes('analysis');
+    const requiresHistoryScope = checked.includes('modification_history') || checked.includes('it_activities') || checked.includes('shift_history');
+    const selectedBranches = requiresBranchSelection ? getSelectedSuperAdminDeleteBranches() : [];
+    const selectedAnalysisBranches = requiresAnalysisSelection ? getSelectedSuperAdminDeleteAnalysisBranches() : [];
+    const historyFilter = requiresHistoryScope ? getSuperAdminDeleteHistoryFilter() : () => true;
+
+    if (requiresBranchSelection && (!selectedBranches || selectedBranches.length === 0)) {
+        toastNotice('warning', 'No branch selection', 'Please select at least one branch or All branches for PC deletion.');
+        return;
+    }
+    if (requiresAnalysisSelection) {
+        const analysisYear = Number(document.getElementById('superAdminDeleteAnalysisYearSelect')?.value);
+        if (!analysisYear || Number.isNaN(analysisYear)) {
+            toastNotice('warning', 'Year required', 'Please select a year for analysis deletion.');
+            return;
+        }
+        if (!selectedAnalysisBranches || selectedAnalysisBranches.length === 0) {
+            toastNotice('warning', 'Branch selection required', 'Please select at least one branch or All branches for analysis deletion.');
+            return;
+        }
+    }
+    if (requiresHistoryScope && !historyFilter) {
+        toastNotice('warning', 'History scope required', 'Please select a date, month, or year for history deletion.');
+        return;
+    }
+
     if (!confirm('Permanently delete selected datasets? This cannot be undone.')) return;
 
     const currentAdmin = getCurrentAdminKey() || adminUserKey || 'superadmin';
@@ -2074,9 +2673,44 @@ async function performSuperAdminDelete() {
             persistStaffProfiles(newProfiles, { force: true, updatedBy: currentAdmin });
         }
 
-        // All PCs / Inventory
-        if (checked.includes('pcs') || checked.includes('inventory')) {
-            pcData = {};
+        // PCs deletion by branch selection
+        if (checked.includes('pcs')) {
+            const selectedBranches = getSelectedSuperAdminDeleteBranches();
+            if (!selectedBranches || selectedBranches.length === 0) {
+                toastNotice('warning', 'No branch selection', 'Please select at least one branch for PC deletion.');
+                return;
+            }
+            selectedBranches.forEach(branch => {
+                if (pcData[branch]) {
+                    delete pcData[branch];
+                }
+            });
+            try { localStorage.setItem('pcData', JSON.stringify(pcData)); } catch (e) {}
+            try { pushPcDataToCloud().catch(()=>{}); } catch(e){}
+            try { renderInventoryReportView(); } catch(e){}
+        }
+
+        // All Inventory
+        if (checked.includes('inventory')) {
+            const selectedConditions = getSelectedInventoryConditions();
+            if (!selectedConditions || selectedConditions.length === 0) {
+                toastNotice('warning', 'Inventory selection required', 'Please select at least one inventory condition or choose Delete all inventory condition groups.');
+                return;
+            }
+            const allSelected = document.getElementById('superAdminDeleteInventoryAllConditions')?.checked;
+            if (allSelected || selectedConditions.length === 6) {
+                pcData = {};
+            } else {
+                branches.forEach(branch => {
+                    const list = pcData[branch] || [];
+                    const filtered = list.filter(pc => !selectedConditions.some(condition => matchesInventoryDeleteCondition(pc, condition)));
+                    if (filtered.length > 0) {
+                        pcData[branch] = filtered;
+                    } else {
+                        delete pcData[branch];
+                    }
+                });
+            }
             try { localStorage.setItem('pcData', JSON.stringify(pcData)); } catch (e) {}
             try { pushPcDataToCloud().catch(()=>{}); } catch(e){}
             try { renderInventoryReportView(); } catch(e){}
@@ -2087,29 +2721,54 @@ async function performSuperAdminDelete() {
             try { persistHomeEditContent(DEFAULT_HOME_EDIT_CONTENT); } catch (e) { localStorage.removeItem(HOME_EDIT_STORAGE_KEY); }
         }
 
-        // Analysis
+        // Analysis deletion for selected year/branches/month
         if (checked.includes('analysis')) {
-            analysisHistory = {};
-            analysisProblemHistoryEntries = [];
+            const analysisYear = Number(document.getElementById('superAdminDeleteAnalysisYearSelect')?.value);
+            const analysisBranches = getSelectedSuperAdminDeleteAnalysisBranches();
+            const analysisMonthSelection = getSelectedSuperAdminDeleteAnalysisMonths();
+            if (!analysisYear || Number.isNaN(analysisYear)) {
+                toastNotice('warning', 'Year required', 'Please select a year for analysis deletion.');
+                return;
+            }
+            if (!analysisBranches || analysisBranches.length === 0) {
+                toastNotice('warning', 'Branch selection required', 'Please select at least one branch or All branches for analysis deletion.');
+                return;
+            }
+            if (analysisMonthSelection === 'all' || (Array.isArray(analysisMonthSelection) && analysisMonthSelection.length > 0)) {
+                deleteAnalysisData(analysisYear, analysisBranches, analysisMonthSelection);
+                persistAnalysisDeleteState();
+            } else {
+                toastNotice('warning', 'Month selection required', 'Please select at least one month or All months for analysis deletion.');
+                return;
+            }
             try { renderAnalysisView(); } catch (e) {}
         }
 
         // Modification history / IT activities
-        if (checked.includes('modification_history') || checked.includes('it_activities')) {
-            modificationHistory = [];
+        const historyScope = getSuperAdminDeleteHistoryFilter();
+        if ((checked.includes('modification_history') || checked.includes('it_activities')) && historyScope) {
+            modificationHistory = modificationHistory.filter(entry => !historyScope(entry));
             try { persistModificationHistory(); } catch (e) {}
             try { pushHistoryToCloud().catch(()=>{}); } catch(e){}
+        } else if ((checked.includes('modification_history') || checked.includes('it_activities')) && !historyScope) {
+            toastNotice('warning', 'History scope required', 'Please select a date, month, or year for history deletion.');
+            return;
         }
 
         // Staff feedbacks
         if (checked.includes('staff_feedbacks')) {
-            try { localStorage.setItem('staffFeedbacks', JSON.stringify([])); } catch (e) {}
+            persistStaffFeedbacks([]);
             try { renderStaffFeedbackHistoryPage(); } catch (e) {}
         }
 
         // Shift history
         if (checked.includes('shift_history')) {
-            itShiftHistory = [];
+            const historyScope = getSuperAdminDeleteHistoryFilter();
+            if (!historyScope) {
+                toastNotice('warning', 'History scope required', 'Please select a date, month, or year for shift history deletion.');
+                return;
+            }
+            itShiftHistory = itShiftHistory.filter(entry => !historyScope(entry));
             try { persistItShiftHistory(); } catch (e) {}
         }
 
@@ -2122,13 +2781,19 @@ async function performSuperAdminDelete() {
                     await syncProfilesToRemote(p, { updatedBy: currentAdmin });
                 }
                 if (checked.includes('pcs') || checked.includes('inventory')) {
-                    await firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc).set({ pcData: {} }, { merge: false });
+                    await firestoreDb.collection(FIREBASE_PCDATA_DOC.collection).doc(FIREBASE_PCDATA_DOC.doc).set({ pcData }, { merge: false });
                 }
                 if (checked.includes('modification_history') || checked.includes('it_activities')) {
-                    await firestoreDb.collection(FIREBASE_HISTORY_DOC.collection).doc(FIREBASE_HISTORY_DOC.doc).set({ history: [] }, { merge: false });
+                    await firestoreDb.collection(FIREBASE_HISTORY_DOC.collection).doc(FIREBASE_HISTORY_DOC.doc).set({ history: modificationHistory }, { merge: false });
                 }
                 if (checked.includes('shift_history')) {
-                    await firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc).set({ shiftHistory: [] }, { merge: false });
+                    await firestoreDb.collection(FIREBASE_SHIFT_DOC.collection).doc(FIREBASE_SHIFT_DOC.doc).set({ shiftHistory: itShiftHistory }, { merge: false });
+                }
+                if (checked.includes('analysis')) {
+                    await firestoreDb.collection(FIREBASE_ANALYSIS_DOC.collection).doc(FIREBASE_ANALYSIS_DOC.doc).set({ analysisDeleteState: serializeAnalysisDeleteState() }, { merge: false });
+                }
+                if (checked.includes('staff_feedbacks')) {
+                    await firestoreDb.collection(FIREBASE_FEEDBACK_DOC.collection).doc(FIREBASE_FEEDBACK_DOC.doc).set({ staffFeedbacks: JSON.parse(localStorage.getItem('staffFeedbacks') || '[]') }, { merge: false });
                 }
                 if (checked.includes('branches')) {
                     try { await firestoreDb.collection('sharedState').doc('homeEditContent').set({ homeEdit: DEFAULT_HOME_EDIT_CONTENT }, { merge: false }); } catch (e) {}
@@ -3585,6 +4250,10 @@ let inventoryFindingsVisible = false;
 const analysisYears = [2023, 2024, 2025, 2026];
 const analysisMonths = ['All', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 let analysisHistory = {};
+let deletedAnalysisYears = new Set();
+let deletedAnalysisBranches = {};
+let deletedAnalysisMonthRemovals = {};
+loadAnalysisDeleteStateFromLocal();
 let analysisChartInstances = {};
 let analysisCompareRequest = null;
 let analysisCompareOpenHandler = null;
@@ -5973,9 +6642,12 @@ function generateAnalysisHistory() {
 }
 
 function getAnalysisDataForYear(year) {
+    if (deletedAnalysisYears.has(year)) {
+        return [];
+    }
     const currentYear = new Date().getFullYear();
     if (year === currentYear) {
-        return branches.map(branch => {
+        const currentYearData = branches.map(branch => {
             const list = pcData[branch] || [];
             const history = buildHistoricalIssueSummaryForBranch(branch, year);
             const issues = history.issueCount;
@@ -6001,10 +6673,11 @@ function getAnalysisDataForYear(year) {
                 monthlyScore
             };
         });
+        return applyDeletedAnalysisFilters(year, currentYearData);
     }
 
     generateAnalysisHistory();
-    return analysisHistory[year] || [];
+    return applyDeletedAnalysisFilters(year, analysisHistory[year] || []);
 }
 
 function filterModificationHistoryByYear(year) {

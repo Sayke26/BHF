@@ -1232,24 +1232,134 @@
     </div>
 
     <div id="superAdminDeleteModalOverlay" class="modal-overlay hidden">
-        <div class="staff-profile-modal">
+        <div class="staff-profile-modal superadmin-delete-modal">
             <button class="modal-close-button" onclick="closeSuperAdminDeleteModal()" aria-label="Close delete modal"><i class="fas fa-times"></i></button>
-            <div style="margin-bottom:12px;">
-                <h3 style="margin:0">Super Admin — Delete Datas</h3>
-                <p style="margin:6px 0 0 0; color:#64748b; font-size:13px;">Select which datasets to permanently remove. This action is irreversible.</p>
+            <div style="margin-bottom:16px;">
+                <h3 class="delete-title">Super Admin — Delete Data</h3>
+                <p class="delete-subtitle">Select datasets to permanently remove, then configure the scope for PC, analysis, inventory, and history deletion.</p>
             </div>
-            <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                <label><input type="checkbox" value="it_staffs" /> All IT Staffs</label>
-                <label><input type="checkbox" value="pcs" /> All PCs</label>
-                <label><input type="checkbox" value="branches" /> All Branch Customizations</label>
-                <label><input type="checkbox" value="analysis" /> All Analysis</label>
-                <label><input type="checkbox" value="modification_history" /> All Modification History</label>
-                <label><input type="checkbox" value="staff_feedbacks" /> All IT Feedback History</label>
-                <label><input type="checkbox" value="shift_history" /> All Shift Log History</label>
-                <label><input type="checkbox" value="it_activities" /> All IT Activities</label>
-                <label><input type="checkbox" value="inventory" /> All Inventory</label>
+            <div class="superadmin-delete-list">
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('it_staffs')">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="it_staffs" /> IT Staff Profiles</span>
+                    <span>Choose</span>
+                </div>
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('inventory')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="inventory" style="margin-right:10px;" /> Inventory Data</span>
+                    <span style="color:#64748b; font-size:13px;">Choose conditions</span>
+                </div>
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('branches')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="branches" style="margin-right:10px;" /> Branch Customizations</span>
+                    <span style="color:#64748b; font-size:13px;">Choose</span>
+                </div>
+
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('pcs')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="pcs" id="superAdminDeletePcsCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> PCs</span>
+                    <span style="color:#64748b; font-size:13px;">Choose branches</span>
+                </div>
+
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('analysis')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="analysis" id="superAdminDeleteAnalysisCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> Analysis</span>
+                    <span style="color:#64748b; font-size:13px;">Choose year / branch / month</span>
+                </div>
+
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('modification_history')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="modification_history" id="superAdminDeleteModificationHistoryCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> Modification History</span>
+                    <span style="color:#64748b; font-size:13px;">Choose scope</span>
+                </div>
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('it_activities')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="it_activities" id="superAdminDeleteActivitiesCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> IT Activities</span>
+                    <span style="color:#64748b; font-size:13px;">Choose scope</span>
+                </div>
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('shift_history')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="shift_history" id="superAdminDeleteShiftHistoryCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> Shift Log History</span>
+                    <span style="color:#64748b; font-size:13px;">Choose scope</span>
+                </div>
+                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('staff_feedbacks')">
+                    <span><input class="superadmin-delete-target" type="checkbox" value="staff_feedbacks" /> IT Feedback History</span>
+                    <span>Choose</span>
+                </div>
             </div>
-            <div style="display:flex; justify-content:space-between; gap:12px; margin-top:16px;">
+
+            <div id="superAdminDeleteChoicePanel" class="superadmin-delete-panel" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;">
+                    <div>
+                        <h4 id="superAdminDeleteChoiceTitle" style="margin:0; font-size:16px;">Choice options</h4>
+                        <p id="superAdminDeleteChoiceSubtitle" style="margin:4px 0 0 0; color:#475569; font-size:13px;">Configure the selected delete action.</p>
+                    </div>
+                    <button type="button" class="btn-secondary" onclick="closeSuperAdminDeleteChoice()" style="padding:8px 12px; font-size:13px;">Close</button>
+                </div>
+                <div id="superAdminDeleteChoiceBody">
+                    <div id="superAdminDeleteChoiceMessage" style="margin-bottom:16px; color:#334155; font-size:14px;"></div>
+                    <div id="superAdminDeletePcsOptions" class="superadmin-delete-section" style="display:none;">
+                        <h4>PC deletion options</h4>
+                        <p style="margin:8px 0 14px 0; color:#475569; font-size:14px;">Choose the branches whose PC records should be removed.</p>
+                        <label><input type="checkbox" id="superAdminDeletePcsAllBranches" onchange="toggleSuperAdminDeleteAllBranches(this.checked); event.stopPropagation();" /> Delete PCs from all branches</label>
+                        <div id="superAdminDeleteBranchList" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px;"></div>
+                    </div>
+                    <div id="superAdminDeleteInventoryOptions" class="superadmin-delete-section" style="display:none;">
+                        <h4>Inventory deletion options</h4>
+                        <p style="margin:8px 0 14px 0; color:#475569; font-size:14px;">Select which inventory condition groups should be removed.</p>
+                        <label><input type="checkbox" id="superAdminDeleteInventoryAllConditions" onchange="toggleSuperAdminDeleteInventoryAllConditions(this.checked);" /> Delete all inventory condition groups</label>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-top:12px;">
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_warning" /> Warning conditions</label>
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_critical" /> Critical conditions</label>
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_offline" /> Offline / Down</label>
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_highTemp" /> High temperature</label>
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_lowStorage" /> Low storage</label>
+                            <label><input type="checkbox" id="superAdminDeleteInventoryCondition_replacement" /> Replacement recommended</label>
+                        </div>
+                    </div>
+                    <div id="superAdminDeleteAnalysisOptions" class="superadmin-delete-section" style="display:none;">
+                        <h4>Analysis deletion options</h4>
+                        <p style="margin:8px 0 14px 0; color:#475569; font-size:14px;">Choose which year, branch, and months to remove from analysis history.</p>
+                        <label style="display:flex; flex-direction:column; gap:8px;">
+                            <span>Select year</span>
+                            <select id="superAdminDeleteAnalysisYearSelect"></select>
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+                            <span>Select branches</span>
+                            <label style="display:flex; align-items:center; gap:10px; font-size:14px; margin-top:8px;">
+                                <input type="checkbox" id="superAdminDeleteAnalysisAllBranches" onchange="toggleSuperAdminDeleteAnalysisAllBranches(this.checked);" /> All branches
+                            </label>
+                            <div id="superAdminDeleteAnalysisBranchList" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px;"></div>
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+                            <span>Select months</span>
+                            <label style="display:flex; align-items:center; gap:10px; font-size:14px; margin-top:8px;">
+                                <input type="checkbox" id="superAdminDeleteAnalysisAllMonths" onchange="toggleSuperAdminDeleteAnalysisAllMonths(this.checked);" /> All months
+                            </label>
+                            <div id="superAdminDeleteAnalysisMonthList" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px;"></div>
+                        </label>
+                    </div>
+                    <div id="superAdminDeleteHistoryOptions" style="display:none; padding:12px; border:1px solid #cbd5e1; border-radius:14px; background:#ffffff;">
+                        <p style="margin:0 0 8px 0; font-weight:600;">History deletion options</p>
+                        <fieldset style="border:none; padding:0; margin:0 0 12px 0; display:flex; gap:12px; flex-wrap:wrap;">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:14px;"><input type="radio" name="superAdminDeleteHistoryScopeType" value="date" checked onchange="toggleSuperAdminDeleteHistoryScope(this.value)" /> Date</label>
+                            <label style="display:flex; align-items:center; gap:8px; font-size:14px;"><input type="radio" name="superAdminDeleteHistoryScopeType" value="month" onchange="toggleSuperAdminDeleteHistoryScope(this.value)" /> Month</label>
+                            <label style="display:flex; align-items:center; gap:8px; font-size:14px;"><input type="radio" name="superAdminDeleteHistoryScopeType" value="year" onchange="toggleSuperAdminDeleteHistoryScope(this.value)" /> Year</label>
+                        </fieldset>
+                        <div id="superAdminDeleteHistoryDate" style="display:block;">
+                            <label style="display:flex; flex-direction:column; gap:6px; font-size:14px; color:#334155;">
+                                <span>Select exact date</span>
+                                <input id="superAdminDeleteHistoryDateInput" type="date" style="padding:10px; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc;" />
+                            </label>
+                        </div>
+                        <div id="superAdminDeleteHistoryMonth" style="display:none; margin-top:10px;">
+                            <label style="display:flex; flex-direction:column; gap:6px; font-size:14px; color:#334155;">
+                                <span>Select month</span>
+                                <input id="superAdminDeleteHistoryMonthInput" type="month" style="padding:10px; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc;" />
+                            </label>
+                        </div>
+                        <div id="superAdminDeleteHistoryYear" style="display:none; margin-top:10px;">
+                            <label style="display:flex; flex-direction:column; gap:6px; font-size:14px; color:#334155;">
+                                <span>Select year</span>
+                                <select id="superAdminDeleteHistoryYearSelect" style="padding:10px; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc;"></select>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="superadmin-delete-panel-footer">
                 <button class="btn-secondary" onclick="closeSuperAdminDeleteModal()">Cancel</button>
                 <button class="delete-btn" onclick="performSuperAdminDelete()">Delete Selected</button>
             </div>

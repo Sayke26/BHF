@@ -2706,6 +2706,52 @@ button.btn-cancel:hover { background: #eff6ff; }
 }
 
 .staff-profile-modal { width: min(100%, 560px); max-width: 560px; max-height: 86vh; overflow-y: auto; border-radius: 28px; padding: 24px; position: relative; background: #ffffff; box-shadow: 0 40px 120px rgba(15,23,42,0.18); }
+.superadmin-delete-modal { width: min(100%, 740px); max-width: 740px; }
+.superadmin-delete-modal .modal-close-button { top: 18px; right: 18px; }
+.superadmin-delete-modal .delete-title { font-size: 22px; letter-spacing: -0.02em; margin-bottom: 8px; }
+.superadmin-delete-modal .delete-subtitle { margin: 0; color: #475569; font-size: 14px; line-height: 1.5; }
+.superadmin-delete-modal .superadmin-delete-list { display: grid; gap: 12px; }
+.superadmin-delete-modal .superadmin-delete-choice { border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 12px 16px; cursor: pointer; transition: box-shadow 0.2s ease, transform 0.15s ease; }
+.superadmin-delete-modal .superadmin-delete-choice:hover { box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12); transform: translateY(-1px); }
+.superadmin-delete-modal .superadmin-delete-choice span:first-child { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: #0f172a; }
+.superadmin-delete-modal .superadmin-delete-choice span:last-child { color: #475569; font-size: 13px; }
+.superadmin-delete-modal .superadmin-delete-panel { margin-top: 16px; padding: 18px; border: 1px solid #dbeafe; border-radius: 24px; background: #f8fbff; }
+.superadmin-delete-modal .superadmin-delete-panel h4 { margin: 0 0 8px 0; font-size: 16px; color: #0f172a; }
+.superadmin-delete-modal .superadmin-delete-panel p { margin: 0; color: #334155; font-size: 14px; line-height: 1.6; }
+.superadmin-delete-modal .superadmin-delete-section { border: 1px solid #cbd5e1; border-radius: 18px; background: #ffffff; padding: 16px; margin-bottom: 14px; }
+.superadmin-delete-modal .superadmin-delete-section label { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #334155; }
+.superadmin-delete-modal .superadmin-delete-section input[type="checkbox"],
+.superadmin-delete-modal .superadmin-delete-section input[type="radio"] { accent-color: #2563eb; }
+#superAdminDeleteBranchList,
+#superAdminDeleteAnalysisBranchList,
+#superAdminDeleteAnalysisMonthList {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  justify-items: stretch;
+}
+#superAdminDeleteBranchList label,
+#superAdminDeleteAnalysisBranchList label,
+#superAdminDeleteAnalysisMonthList label {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 12px 14px;
+  min-height: 46px;
+}
+#superAdminDeleteAnalysisBranchList label,
+#superAdminDeleteAnalysisMonthList label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.superadmin-delete-modal .superadmin-delete-section select,
+.superadmin-delete-modal .superadmin-delete-section input[type="date"],
+.superadmin-delete-modal .superadmin-delete-section input[type="month"] { width: 100%; max-width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a; }
+.superadmin-delete-modal .superadmin-delete-panel-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; }
 .modal-overlay { padding: 24px 20px; align-items: center; justify-content: center; overflow-y: auto; }
 .modal-overlay > .staff-profile-modal { margin: 0; }
 .modal-close-button { position: absolute; top: 20px; right: 20px; width: 44px; height: 44px; border-radius: 14px; border: none; background: rgba(255,255,255,0.98); color: #102d6d; cursor: pointer; display: grid; place-items: center; box-shadow: 0 12px 28px rgba(15,23,42,0.14); transition: transform 0.2s ease; }
