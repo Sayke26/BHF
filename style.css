@@ -1831,9 +1831,14 @@ button.delete-btn:hover { background: #ffe5e5; }
     background: white;
     padding: 30px;
     border-radius: 12px;
-    width: 90%;
-    max-width: 400px;
+    width: min(100%, 760px);
+    max-width: 760px;
     box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+}
+
+#branchIssueEditorOverlay .pc-editor-modal {
+    width: min(100%, 760px);
+    max-width: 760px;
 }
 
 /* Advanced Health Modal Styles */
@@ -2736,49 +2741,76 @@ button.btn-cancel:hover { background: #eff6ff; }
 .staff-profile-modal a.edit-btn { background: #f2f7ff; color: #102d6d; }
 
 @media (max-width: 640px) {
-    .modal-overlay {
-        padding: 12px;
+    #staffProfileModal.modal-overlay {
+        padding: 8px;
         align-items: center;
         justify-content: center;
+        overflow-y: auto;
     }
-    .staff-profile-hero { grid-template-columns: 1fr; gap: 12px; }
+    .staff-profile-hero { grid-template-columns: 1fr; gap: 8px; }
     .staff-profile-avatar {
         margin: 0 auto;
-        width: 110px;
-        height: 110px;
-        border-radius: 22px;
+        width: 80px;
+        height: 80px;
+        border-radius: 14px;
     }
     .modal-close-button {
-        top: 16px;
-        right: 16px;
-        width: 40px;
-        height: 40px;
+        top: 10px;
+        right: 10px;
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
         z-index: 60;
     }
     .staff-profile-modal {
-        width: min(100%, 88vw);
-        max-width: 88vw;
-        padding: 16px;
-        padding-top: 48px;
-        max-height: 84vh;
-        border-radius: 20px;
-        margin: 0;
+        width: min(92vw, 360px);
+        max-width: 360px;
+        padding: 10px;
+        padding-top: 38px;
+        max-height: 65vh;
+        border-radius: 14px;
+        margin: 8px auto;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 50px rgba(2,6,23,0.35);
     }
-    .staff-profile-hero h3 { font-size: 24px; }
-    .staff-profile-role { font-size: 13px; }
-    .staff-profile-status { padding: 10px 14px; font-size: 12px; }
-    .staff-profile-summary { padding: 16px 18px; }
-    .staff-contact-item { padding: 12px 14px; font-size: 14px; }
-    .staff-link-list a { padding: 12px 14px; }
+    .staff-profile-content { 
+        gap: 10px; 
+        overflow-y: auto;
+        flex: 1;
+        padding-right: 4px;
+    }
+    .staff-profile-content::-webkit-scrollbar { width: 6px; }
+    .staff-profile-content::-webkit-scrollbar-thumb { background: rgba(37,99,235,0.3); border-radius: 3px; }
+    .staff-specialist-section { padding: 10px; gap: 6px; }
+    .staff-profile-hero h3 { font-size: 20px; margin: 2px 0 0; }
+    .staff-profile-role { font-size: 11px; margin: 0; }
+    .staff-profile-status { padding: 6px 10px; font-size: 10px; }
+    .staff-profile-summary { padding: 0; font-size: 12px; line-height: 1.5; }
+    .staff-contact-grid { grid-template-columns: 1fr; gap: 6px; }
+    .contact-card { 
+        padding: 8px 10px; 
+        gap: 6px; 
+        border-radius: 12px;
+    }
+    .contact-icon { width: 36px; height: 36px; }
+    .contact-label { font-size: 9px; }
+    .contact-value { font-size: 12px; }
+    .staff-link-list a { padding: 8px 10px; font-size: 13px; }
     .staff-modal-actions {
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
+        gap: 6px;
+        flex-shrink: 0;
     }
+    .staff-action-buttons { grid-template-columns: 1fr; gap: 6px; }
     .staff-modal-actions button {
         width: 100%;
         min-width: 0;
         justify-content: center;
+        padding: 10px 8px;
+        font-size: 12px;
     }
 }
 
