@@ -2275,6 +2275,8 @@ function initializeSuperAdminDeleteModal() {
     document.getElementById('superAdminDeleteHistoryOptions').style.display = 'none';
     const allBranchesCheckbox = document.getElementById('superAdminDeletePcsAllBranches');
     if (allBranchesCheckbox) allBranchesCheckbox.checked = false;
+    const allHistoryBranchesCheckbox = document.getElementById('superAdminDeleteHistoryAllBranches');
+    if (allHistoryBranchesCheckbox) allHistoryBranchesCheckbox.checked = false;
     toggleSuperAdminDeleteHistoryScope('date');
 
     const branchList = document.getElementById('superAdminDeleteBranchList');
@@ -2332,13 +2334,23 @@ function initializeSuperAdminDeleteModal() {
         historyYearSelect.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('');
         historyYearSelect.value = String(now.getFullYear());
     }
+
+    const historyBranchList = document.getElementById('superAdminDeleteHistoryBranchList');
+    if (historyBranchList) {
+        historyBranchList.innerHTML = branches.map(branch => `
+            <label style="display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:8px; cursor:pointer;">
+                <input type="checkbox" class="superAdminDeleteHistoryBranchCheckbox" value="${branch}" />
+                ${branch}
+            </label>
+        `).join('');
+    }
 }
 
 function openSuperAdminDeleteChoice(type) {
     const overlay = document.getElementById('superAdminDeleteModalOverlay');
     if (!overlay) return;
     const checkbox = overlay.querySelector(`.superadmin-delete-target[value="${type}"]`);
-    if (checkbox) checkbox.checked = true;
+    if (checkbox && !checkbox.checked) checkbox.checked = true;
     renderSuperAdminDeleteChoicePanel(type);
     const panel = document.getElementById('superAdminDeleteChoicePanel');
     if (panel) {
@@ -2385,11 +2397,6 @@ function renderSuperAdminDeleteChoicePanel(type) {
             if (title) title.textContent = 'Inventory Data Deletion';
             if (subtitle) subtitle.textContent = 'Choose inventory condition groups to remove, or delete all inventory.';
             if (inventoryOptions) inventoryOptions.style.display = 'block';
-            break;
-        case 'branches':
-            if (title) title.textContent = 'Branch Customizations Reset';
-            if (subtitle) subtitle.textContent = 'Reset branch home customization content to default for all branches.';
-            if (message) message.textContent = 'This will remove any customized branch home edit content and restore the default text.';
             break;
         case 'modification_history':
             if (title) title.textContent = 'Modification History Deletion';
@@ -2581,6 +2588,7 @@ function toggleSuperAdminDeleteHistoryScope(scope) {
 function getSuperAdminDeleteHistoryFilter() {
     const scopeInput = document.querySelector('input[name="superAdminDeleteHistoryScopeType"]:checked');
     const scope = scopeInput?.value || 'date';
+    const selectedBranches = getSelectedSuperAdminDeleteHistoryBranches();
     if (scope === 'date') {
         const value = document.getElementById('superAdminDeleteHistoryDateInput')?.value;
         if (!value) return null;
@@ -2589,7 +2597,7 @@ function getSuperAdminDeleteHistoryFilter() {
         return entry => {
             const logDate = new Date(entry.timestamp);
             logDate.setHours(0, 0, 0, 0);
-            return logDate.getTime() === target.getTime();
+            return logDate.getTime() === target.getTime() && isHistoryEntryInSelectedBranches(entry, selectedBranches);
         };
     }
 
@@ -2599,7 +2607,7 @@ function getSuperAdminDeleteHistoryFilter() {
         const [year, month] = value.split('-').map(Number);
         return entry => {
             const logDate = new Date(entry.timestamp);
-            return logDate.getFullYear() === year && logDate.getMonth() + 1 === month;
+            return logDate.getFullYear() === year && logDate.getMonth() + 1 === month && isHistoryEntryInSelectedBranches(entry, selectedBranches);
         };
     }
 
@@ -2609,11 +2617,27 @@ function getSuperAdminDeleteHistoryFilter() {
         const year = Number(value);
         return entry => {
             const logDate = new Date(entry.timestamp);
-            return logDate.getFullYear() === year;
+            return logDate.getFullYear() === year && isHistoryEntryInSelectedBranches(entry, selectedBranches);
         };
     }
 
     return null;
+}
+
+function getSelectedSuperAdminDeleteHistoryBranches() {
+    const allBranches = document.getElementById('superAdminDeleteHistoryAllBranches')?.checked;
+    if (allBranches) return [...branches];
+    const selected = Array.from(document.querySelectorAll('.superAdminDeleteHistoryBranchCheckbox:checked')).map(el => el.value);
+    return selected;
+}
+
+function toggleSuperAdminDeleteHistoryAllBranches(checked) {
+    document.querySelectorAll('.superAdminDeleteHistoryBranchCheckbox').forEach(cb => { cb.checked = checked; });
+}
+
+function isHistoryEntryInSelectedBranches(entry, selectedBranches) {
+    if (!selectedBranches || selectedBranches.length === 0) return true;
+    return selectedBranches.includes(entry.branch || entry.location || entry.targetBranch || '');
 }
 
 function getSelectedSuperAdminDeleteBranches() {
@@ -2716,11 +2740,6 @@ async function performSuperAdminDelete() {
             try { renderInventoryReportView(); } catch(e){}
         }
 
-        // Branch customizations (home edit content)
-        if (checked.includes('branches')) {
-            try { persistHomeEditContent(DEFAULT_HOME_EDIT_CONTENT); } catch (e) { localStorage.removeItem(HOME_EDIT_STORAGE_KEY); }
-        }
-
         // Analysis deletion for selected year/branches/month
         if (checked.includes('analysis')) {
             const analysisYear = Number(document.getElementById('superAdminDeleteAnalysisYearSelect')?.value);
@@ -2745,7 +2764,12 @@ async function performSuperAdminDelete() {
         }
 
         // Modification history / IT activities
+        const selectedHistoryBranches = getSelectedSuperAdminDeleteHistoryBranches();
         const historyScope = getSuperAdminDeleteHistoryFilter();
+        if ((checked.includes('modification_history') || checked.includes('it_activities') || checked.includes('shift_history')) && (!selectedHistoryBranches || selectedHistoryBranches.length === 0)) {
+            toastNotice('warning', 'Branch selection required', 'Please choose at least one branch or All branches for history deletion.');
+            return;
+        }
         if ((checked.includes('modification_history') || checked.includes('it_activities')) && historyScope) {
             modificationHistory = modificationHistory.filter(entry => !historyScope(entry));
             try { persistModificationHistory(); } catch (e) {}
@@ -2794,9 +2818,6 @@ async function performSuperAdminDelete() {
                 }
                 if (checked.includes('staff_feedbacks')) {
                     await firestoreDb.collection(FIREBASE_FEEDBACK_DOC.collection).doc(FIREBASE_FEEDBACK_DOC.doc).set({ staffFeedbacks: JSON.parse(localStorage.getItem('staffFeedbacks') || '[]') }, { merge: false });
-                }
-                if (checked.includes('branches')) {
-                    try { await firestoreDb.collection('sharedState').doc('homeEditContent').set({ homeEdit: DEFAULT_HOME_EDIT_CONTENT }, { merge: false }); } catch (e) {}
                 }
             } catch (e) { console.error('SuperAdmin delete remote ops failed', e); }
         }

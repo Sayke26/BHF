@@ -1240,18 +1240,13 @@
             </div>
             <div class="superadmin-delete-list">
                 <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('it_staffs')">
-                    <span><input class="superadmin-delete-target" type="checkbox" value="it_staffs" /> IT Staff Profiles</span>
+                    <span><input class="superadmin-delete-target" type="checkbox" value="it_staffs" onclick="event.stopPropagation();" /> IT Staff Profiles</span>
                     <span>Choose</span>
                 </div>
                 <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('inventory')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
-                    <span><input class="superadmin-delete-target" type="checkbox" value="inventory" style="margin-right:10px;" /> Inventory Data</span>
+                    <span><input class="superadmin-delete-target" type="checkbox" value="inventory" style="margin-right:10px;" onclick="event.stopPropagation();" /> Inventory Data</span>
                     <span style="color:#64748b; font-size:13px;">Choose conditions</span>
                 </div>
-                <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('branches')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
-                    <span><input class="superadmin-delete-target" type="checkbox" value="branches" style="margin-right:10px;" /> Branch Customizations</span>
-                    <span style="color:#64748b; font-size:13px;">Choose</span>
-                </div>
-
                 <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('pcs')" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:14px; cursor:pointer; background:#ffffff;">
                     <span><input class="superadmin-delete-target" type="checkbox" value="pcs" id="superAdminDeletePcsCheckbox" style="margin-right:10px;" onclick="event.stopPropagation();" /> PCs</span>
                     <span style="color:#64748b; font-size:13px;">Choose branches</span>
@@ -1275,7 +1270,7 @@
                     <span style="color:#64748b; font-size:13px;">Choose scope</span>
                 </div>
                 <div class="superadmin-delete-choice" onclick="openSuperAdminDeleteChoice('staff_feedbacks')">
-                    <span><input class="superadmin-delete-target" type="checkbox" value="staff_feedbacks" /> IT Feedback History</span>
+                    <span><input class="superadmin-delete-target" type="checkbox" value="staff_feedbacks" onclick="event.stopPropagation();" /> IT Feedback History</span>
                     <span>Choose</span>
                 </div>
             </div>
@@ -1355,6 +1350,13 @@
                                 <span>Select year</span>
                                 <select id="superAdminDeleteHistoryYearSelect" style="padding:10px; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc;"></select>
                             </label>
+                        </div>
+                        <div id="superAdminDeleteHistoryBranchFilter" style="margin-top:16px;">
+                            <p style="margin:0 0 8px 0; font-weight:600;">Branch scope</p>
+                            <label style="display:flex; align-items:center; gap:10px; font-size:14px; margin-bottom:10px;">
+                                <input type="checkbox" id="superAdminDeleteHistoryAllBranches" onchange="toggleSuperAdminDeleteHistoryAllBranches(this.checked);" /> All branches
+                            </label>
+                            <div id="superAdminDeleteHistoryBranchList" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px;"></div>
                         </div>
                     </div>
                 </div>
