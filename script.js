@@ -4267,6 +4267,34 @@ function renderTempBadge(temp) {
     return `<span class="temp-badge ${stateClass}"><i class="fas ${icon}" aria-hidden="true"></i>${value}°C</span>`;
 }
 
+function getStorageHealthValue(pc) {
+    if (!pc || pc.storageHealth == null || pc.storageHealth === '') return undefined;
+    const explicitValue = Number(pc.storageHealth);
+    if (!Number.isNaN(explicitValue) && explicitValue >= 0 && explicitValue <= 100) {
+        return explicitValue;
+    }
+    return undefined;
+}
+
+function renderStorageHealthBadge(valueOrPc) {
+    let safeValue;
+    if (valueOrPc != null && typeof valueOrPc === 'object') {
+        safeValue = getStorageHealthValue(valueOrPc);
+    } else if (typeof valueOrPc === 'string' && valueOrPc.trim() === '') {
+        safeValue = undefined;
+    } else if (valueOrPc == null) {
+        safeValue = undefined;
+    } else {
+        safeValue = Number(valueOrPc);
+    }
+    if (safeValue === undefined || Number.isNaN(safeValue)) {
+        return `<span class="temp-badge temp-badge-gray"><i class="fas fa-question-circle" aria-hidden="true"></i>N/A</span>`;
+    }
+    const icon = safeValue <= 29 ? 'fa-exclamation-circle' : safeValue <= 49 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+    const stateClass = safeValue <= 29 ? 'temp-badge-critical' : safeValue <= 49 ? 'temp-badge-warning' : 'temp-badge-normal';
+    return `<span class="temp-badge ${stateClass}"><i class="fas ${icon}" aria-hidden="true"></i>${Math.round(safeValue)}%</span>`;
+}
+
 
 function openAdminPage() {
     hideAllPages();
@@ -7517,10 +7545,22 @@ function downloadInventoryFindings() {
 }
 
 function renderAnalysisBranchIssuesChart(branchData, selectedBranch) {
-    const labels = branchData.map(item => item.branch);
-    const values = branchData.map(item => item.issues);
+    const sortedBranches = branchData.slice().sort((a, b) => b.issues - a.issues);
+    const labels = sortedBranches.map(item => item.branch);
+    const values = sortedBranches.map(item => item.issues);
     const background = labels.map(branch => branch === selectedBranch ? '#2563eb' : '#7c3aed');
-    updateChart('analysisBranchIssuesChart', 'bar', { labels, datasets: [{ label: 'Issue Count', data: values, backgroundColor: background }] }, { responsive: true, plugins: { legend: { display: false } } });
+    updateChart('analysisBranchIssuesChart', 'bar', {
+        labels,
+        datasets: [{
+            label: 'Issue Count',
+            data: values,
+            backgroundColor: background
+        }]
+    }, {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    });
 }
 
 function renderAnalysisPerformanceChart(branchData, year, month, selectedBranch) {
@@ -7707,41 +7747,37 @@ function deriveInventoryAlertInfo(pc) {
     const tempValue = parseInt(pc.processorTemp || pc.pcTemp) || 0;
     const storageType = normalizeStorageType(pc.storage);
     const storageWear = normalizeStorageWear(pc.storageWear, storageType);
-    const storageHealthLabel = getStorageHealthLabel(storageType, storageWear);
+    const storageHealthValue = getStorageHealthValue(pc);
+    const hasStorageHealthValue = typeof storageHealthValue === 'number' && !Number.isNaN(storageHealthValue);
+    const storageHealthLabel = hasStorageHealthValue ? getStorageHealthLabel(storageType, storageHealthValue) : 'Storage health N/A';
 
     const highTemp = tempValue >= 75 || (pc.processorTemp && tempValue >= 85);
     const lowStorage = freeSpaceNum <= 50;
-    const replacementRecommended = pc.health === 'Critical' || freeSpaceNum <= 15 || tempValue >= 85 || (isStorageSSD(storageType) ? storageWear <= 20 : isStorageHDD(storageType) ? storageWear <= 30 : storageWear <= 25);
+    const replacementRecommended = pc.health === 'Critical' || freeSpaceNum <= 15 || tempValue >= 85 || (hasStorageHealthValue && storageHealthValue <= 29) || (isStorageSSD(storageType) ? storageWear <= 20 : isStorageHDD(storageType) ? storageWear <= 30 : storageWear <= 25);
 
     const alertPieces = [];
     const fixes = [];
 
-    const showStorageWear = isStorageSSD(storageType)
-        ? (storageWear <= 40 || lowStorage || tempValue >= 70 || replacementRecommended)
-        : isStorageHDD(storageType)
-            ? (storageWear <= 50 || lowStorage || replacementRecommended)
-            : (storageWear <= 50 || lowStorage || tempValue >= 70 || replacementRecommended);
-
-    if (showStorageWear) {
+    if (hasStorageHealthValue && (storageHealthValue <= 60 || lowStorage || tempValue >= 70 || replacementRecommended)) {
         alertPieces.push(storageHealthLabel);
     }
 
     if (isStorageSSD(storageType)) {
-        if (storageWear <= 20) {
+        if (hasStorageHealthValue && storageHealthValue <= 29) {
             fixes.push('Replace SSD immediately');
-        } else if (storageWear <= 40) {
+        } else if (hasStorageHealthValue && storageHealthValue <= 49) {
             fixes.push('Plan SSD replacement soon');
         } else if (freeSpaceNum <= 15) {
             fixes.push('Free disk space or upgrade SSD');
         }
     } else if (isStorageHDD(storageType)) {
-        if (storageWear <= 30) {
+        if (hasStorageHealthValue && storageHealthValue <= 29) {
             fixes.push('Backup data and replace HDD');
         } else if (freeSpaceNum <= 15) {
             fixes.push('Free disk space or upgrade HDD');
         }
     } else {
-        if (storageWear <= 30) {
+        if (hasStorageHealthValue && storageHealthValue <= 29) {
             fixes.push('Inspect storage health');
         } else if (freeSpaceNum <= 15) {
             fixes.push('Free disk space or upgrade storage');
@@ -7936,6 +7972,7 @@ function renderInventoryReportView() {
             : `<span class="state-chip down"><i class="fas fa-power-off"></i> Down</span>`;
 
         const freeSpaceNum = parseInt(row.pc.freeSpace) || 0;
+        const storageHealthPct = getStorageHealthValue(row.pc);
         const storageColor = freeSpaceNum <= 15 ? 'red' : freeSpaceNum <= 50 ? 'orange' : 'green';
         const storageLabel = freeSpaceNum <= 15 ? 'Critical' : freeSpaceNum <= 50 ? 'Low' : 'Healthy';
         const storageBarWidth = Math.min(100, Math.max(0, freeSpaceNum));
@@ -7960,6 +7997,8 @@ function renderInventoryReportView() {
                     <span class="inventory-pill gray"><i class="fas fa-user"></i> ${row.user}</span>
                 </td>
                 <td>${healthBadge}</td>
+                <td>${renderStorageHealthBadge(storageHealthPct)}</td>
+                <td>${renderStorageHealthBadge(storageHealthPct)}</td>
                 <td>
                     <div style="display:flex; flex-direction:column; gap:8px;">
                         <span class="inventory-pill ${storageColor}"><i class="fas fa-hdd"></i>${row.freeSpace}</span>
@@ -8221,6 +8260,7 @@ function renderBranchTableLog(branchName) {
                     </div>
                 </td>
                 
+                <td>${renderStorageHealthBadge(pc.storageHealth)}</td>
                 <td>${renderTempBadge(pc.pcTemp)}</td>
                 <td>${renderTempBadge(pc.processorTemp || pc.pcTemp)}</td>
                 <td><span style="display:inline-flex; align-items:center; gap:4px; background:#e8f3ff; color:#0d47a1; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:600;"><i class="fas fa-user"></i>${pc.username || 'N/A'}</span></td>
@@ -8302,11 +8342,13 @@ function openAddPcForm() {
     }
 }
 
-function computeHealthStatus(freeSpaceGb, tempC) {
+function computeHealthStatus(freeSpaceGb, tempC, storageHealthPct) {
     const freeValue = Number(freeSpaceGb) || 0;
     const tempValue = Number(tempC) || 0;
-    if (freeValue <= 15 || tempValue >= 85) return "Critical";
-    if (freeValue <= 50 || tempValue >= 70) return "Warning";
+    const storageHealthValue = storageHealthPct === '' || storageHealthPct == null ? undefined : Number(storageHealthPct);
+    const hasStorageHealthValue = storageHealthValue !== undefined && !Number.isNaN(storageHealthValue);
+    if (freeValue <= 15 || tempValue >= 85 || (hasStorageHealthValue && storageHealthValue <= 29)) return "Critical";
+    if (freeValue <= 50 || tempValue >= 70 || (hasStorageHealthValue && storageHealthValue <= 49)) return "Warning";
     return "Healthy";
 }
 
@@ -8322,6 +8364,8 @@ function handleNewPcFormSubmission(event) {
     const storage = document.getElementById("storage").value.trim();
     const capacityNum = Number(document.getElementById("capacity").value);
     const freeSpaceNum = Number(document.getElementById("freeSpace").value);
+    const storageHealthRaw = document.getElementById("storageHealth").value;
+    const storageHealthValue = Number(storageHealthRaw);
     const pcTemp = Number(document.getElementById("pcTemp").value);
     const processorTemp = Number(document.getElementById("processorTemp").value);
     const username = document.getElementById("username").value.trim();
@@ -8348,6 +8392,10 @@ function handleNewPcFormSubmission(event) {
         toastNotice('warning', 'Input Required', "Disk Capacity is required.");
         return;
     }
+    if (storageHealthRaw.trim() === '' || Number.isNaN(storageHealthValue) || storageHealthValue < 0 || storageHealthValue > 100) {
+        toastNotice('warning', 'Input Required', "Storage Health must be a percentage from 0 to 100.");
+        return;
+    }
     if (!storage) {
         toastNotice('warning', 'Input Required', "Storage Type is required.");
         return;
@@ -8358,7 +8406,7 @@ function handleNewPcFormSubmission(event) {
         return;
     }
 
-    const evaluatedHealth = computeHealthStatus(freeSpaceNum, pcTemp);
+    const evaluatedHealth = computeHealthStatus(freeSpaceNum, pcTemp, storageHealthValue);
     const severityRank = { Healthy: 0, Warning: 1, Critical: 2 };
     let health = evaluatedHealth;
     if (severityRank[manualHealth] > severityRank[evaluatedHealth]) {
@@ -8375,6 +8423,7 @@ function handleNewPcFormSubmission(event) {
         storage: storage,
         capacity: `${capacityNum}GB`,
         freeSpace: `${freeSpaceNum}GB`,
+        storageHealth: storageHealthValue,
         pcTemp: pcTemp,
         processorTemp: !Number.isNaN(processorTemp) && processorTemp > 0 ? processorTemp : pcTemp + 5,
         storageWear: getStorageWearForType(storage),
@@ -8411,6 +8460,7 @@ function handleNewPcFormSubmission(event) {
             storage: storage,
             capacity: `${capacityNum}GB`,
             freeSpace: `${freeSpaceNum}GB`,
+            storageHealth: storageHealthValue,
             temp: pcTemp,
             username: username
             , replacementRemarks: replacementRemarks || undefined
@@ -8418,6 +8468,7 @@ function handleNewPcFormSubmission(event) {
     });
 
     localStorage.setItem("pcData", JSON.stringify(pcData));
+    try { pushPcDataToCloud().catch(() => {}); } catch (e) {}
     persistModificationHistory();
 
     document.getElementById("pcFormContainer").classList.add("hidden");
@@ -8481,14 +8532,16 @@ function commitFloatingPcUpdate() {
     const updatedFreeSpaceRaw = document.getElementById("modalFreeSpace").value;
     const updatedCapacity = normalizeGbString(updatedCapacityRaw || pc.capacity, 256);
     const updatedFreeSpace = normalizeGbString(updatedFreeSpaceRaw || pc.freeSpace, 100);
+    const updatedStorageHealthRaw = document.getElementById("modalStorageHealth").value;
+    const updatedStorageHealth = Number(updatedStorageHealthRaw);
     const updatedTemp = Number(document.getElementById("modalPcTemp").value) || pc.pcTemp;
 
-    // Apply auto-health detection based on telemetry
+    const hasUpdatedStorageHealth = updatedStorageHealthRaw.trim() !== '' && !Number.isNaN(updatedStorageHealth);
     const spaceNum = parseGbValue(updatedFreeSpace) || 0;
     let evaluatedHealth = 'Healthy';
-    if (spaceNum <= 15 || updatedTemp >= 85) {
+    if (spaceNum <= 15 || updatedTemp >= 85 || (hasUpdatedStorageHealth && updatedStorageHealth <= 29)) {
         evaluatedHealth = 'Critical';
-    } else if (spaceNum <= 50 || updatedTemp >= 70) {
+    } else if (spaceNum <= 50 || updatedTemp >= 70 || (hasUpdatedStorageHealth && updatedStorageHealth <= 49)) {
         evaluatedHealth = 'Warning';
     }
 
@@ -8521,6 +8574,7 @@ function commitFloatingPcUpdate() {
             storage: updatedStorage,
             capacity: updatedCapacity,
             freeSpace: updatedFreeSpace,
+            storageHealth: updatedStorageHealth,
             temp: updatedTemp,
             username: pc.username
             // replacementRemarks will be appended below if provided
@@ -8535,6 +8589,11 @@ function commitFloatingPcUpdate() {
     pc.storage = updatedStorage;
     pc.capacity = updatedCapacity;
     pc.freeSpace = updatedFreeSpace;
+    if (updatedStorageHealthRaw.trim() !== '') {
+        pc.storageHealth = updatedStorageHealth;
+    } else {
+        delete pc.storageHealth;
+    }
     pc.pcTemp = updatedTemp;
     pc.processorTemp = updatedTemp + 5;
     // Save replacement remarks if supplied
@@ -8553,6 +8612,7 @@ function commitFloatingPcUpdate() {
 
     // Persist changes
     localStorage.setItem("pcData", JSON.stringify(pcData));
+    try { pushPcDataToCloud().catch(() => {}); } catch (e) {}
     persistModificationHistory();
 
     closeFloatingUpdateOverlay();
@@ -8681,6 +8741,7 @@ function loadSelectedPcDetailsForEditing() {
     document.getElementById("modalStorage").value = pc.storage || "";
     document.getElementById("modalCapacity").value = parseInt(pc.capacity) || "";
     document.getElementById("modalFreeSpace").value = parseInt(pc.freeSpace) || "";
+    document.getElementById("modalStorageHealth").value = pc.storageHealth ?? "";
     document.getElementById("modalReplacementRemarks").value = pc.replacementRemarks || "";
 }
 
@@ -8729,9 +8790,13 @@ function normalizeStorageWear(value, storage) {
 }
 
 function getStorageHealthLabel(storage, storageWear) {
-    if (isStorageSSD(storage)) return `SSD health ${storageWear}%`;
-    if (isStorageHDD(storage)) return `HDD health ${storageWear}%`;
-    return `Storage health ${storageWear}%`;
+    const value = Number(storageWear);
+    if (Number.isNaN(value)) {
+        return 'Storage health N/A';
+    }
+    if (isStorageSSD(storage)) return `SSD health ${value}%`;
+    if (isStorageHDD(storage)) return `HDD health ${value}%`;
+    return `Storage health ${value}%`;
 }
 
 function buildAssetWarrantyInfo() {
@@ -9828,10 +9893,19 @@ function populateBranchIssueEditor(branchName) {
     problemPcs.forEach(pc => {
         const causes = [];
         const spaceVal = parseInt(pc.freeSpace) || 0;
+        const storageHealthVal = getStorageHealthValue(pc);
+        const hasStorageHealthValue = typeof storageHealthVal === 'number' && !Number.isNaN(storageHealthVal);
         if (spaceVal <= 15) causes.push({type:'critical', label:`Low Disk (${pc.freeSpace})`} );
         else if (spaceVal <= 50) causes.push({type:'warning', label:`Low Disk (${pc.freeSpace})`} );
         if (pc.pcTemp >= 85) causes.push({type:'critical', label:`High Temp (${pc.pcTemp}°C)`});
         else if (pc.pcTemp >= 70) causes.push({type:'warning', label:`High Temp (${pc.pcTemp}°C)`});
+        if (hasStorageHealthValue) {
+            if (storageHealthVal <= 29) {
+                causes.push({type:'critical', label:`Storage Health ${storageHealthVal}%`});
+            } else if (storageHealthVal <= 49) {
+                causes.push({type:'warning', label:`Storage Health ${storageHealthVal}%`});
+            }
+        }
 
         const card = document.createElement('div');
         card.className = 'issue-editor-card';
@@ -9861,6 +9935,8 @@ function populateBranchIssueEditor(branchName) {
                     <input id="issue-capacity-${pc.__idx}" type="number" min="0" class="issue-input" value="${parseInt(pc.capacity) || ''}" />
                     <label style="font-weight:700; font-size:13px; margin-top:6px;">Free Space (GB)</label>
                     <input id="issue-free-${pc.__idx}" type="number" min="0" class="issue-input" value="${parseInt(pc.freeSpace) || ''}" />
+                    <label style="font-weight:700; font-size:13px; margin-top:6px;">Storage Health (%)</label>
+                    <input id="issue-storage-health-${pc.__idx}" type="number" min="0" max="100" class="issue-input" value="${pc.storageHealth ?? ''}" placeholder="0-100" />
                 </div>
                 <div style="width:240px; display:flex; flex-direction:column; gap:8px;">
                     <label style="font-weight:700; font-size:13px;">Operational State</label>
@@ -9871,6 +9947,13 @@ function populateBranchIssueEditor(branchName) {
                     <input id="issue-temp-${pc.__idx}" type="number" class="issue-input" value="${pc.pcTemp}" />
                     <label style="font-weight:700; font-size:13px; margin-top:6px;"><i class="fas fa-user" style="color:#2563eb; margin-right:4px;"></i>Primary User</label>
                     <input id="issue-username-${pc.__idx}" class="issue-input" value="${pc.username || ''}" />
+                    <label style="font-weight:700; font-size:13px; margin-top:6px;">Storage Replacement</label>
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px; color:#334155;">
+                        <input id="issue-storage-replaced-${pc.__idx}" type="checkbox" ${pc.storageReplaced ? 'checked' : ''} />
+                        Storage Replaced
+                    </label>
+                    <label style="font-weight:700; font-size:13px; margin-top:6px;">Replacement Storage Model</label>
+                    <input id="issue-replacement-storage-model-${pc.__idx}" class="issue-input" value="${escapeHtml(pc.replacementStorageModel || '')}" placeholder="Required when storage was replaced" />
                 </div>
             </div>
             <div class="editor-action-row">
@@ -9921,6 +10004,21 @@ function saveBranchPcEdit(branchName, idx) {
     const newFree = normalizeGbString(newFreeRaw || pc.freeSpace, parseGbValue(pc.freeSpace, 100));
     const newTemp = Number(document.getElementById(`issue-temp-${idx}`).value) || pc.pcTemp;
     const newUsername = document.getElementById(`issue-username-${idx}`).value.trim() || pc.username;
+    const newStorageHealthRaw = document.getElementById(`issue-storage-health-${idx}`)?.value || '';
+    const newStorageHealth = Number(newStorageHealthRaw);
+    const newStorageReplaced = document.getElementById(`issue-storage-replaced-${idx}`)?.checked || false;
+    const newReplacementStorageModel = document.getElementById(`issue-replacement-storage-model-${idx}`)?.value.trim() || '';
+    const hasStorageHealthValue = newStorageHealthRaw.trim() !== '' && !Number.isNaN(newStorageHealth);
+
+    if (newStorageReplaced && !newReplacementStorageModel) {
+        toastNotice('warning', 'Storage Replacement Required', 'Please enter the replacement storage model when the storage replacement checkbox is selected.');
+        return;
+    }
+
+    if (newStorageHealthRaw.trim() !== '' && (Number.isNaN(newStorageHealth) || newStorageHealth < 0 || newStorageHealth > 100)) {
+        toastNotice('warning', 'Invalid Storage Health', 'Storage Health must be a percentage between 0 and 100.');
+        return;
+    }
 
     const prior = { ...pc };
 
@@ -9935,12 +10033,24 @@ function saveBranchPcEdit(branchName, idx) {
     pc.pcTemp = newTemp;
     pc.processorTemp = newTemp + 5;
     pc.username = newUsername;
+    if (hasStorageHealthValue) {
+        pc.storageHealth = newStorageHealth;
+    } else {
+        delete pc.storageHealth;
+    }
+    pc.storageReplaced = newStorageReplaced;
+    if (newStorageReplaced) {
+        pc.replacementStorageModel = newReplacementStorageModel;
+    } else {
+        delete pc.replacementStorageModel;
+        delete pc.storageReplaced;
+    }
 
     // re-evaluate health based on thresholds to preserve system rules
     const spaceNum = parseGbValue(newFree) || 0;
     let evaluated = 'Healthy';
-    if (spaceNum <= 15 || newTemp >= 85) evaluated = 'Critical';
-    else if (spaceNum <= 50 || newTemp >= 70) evaluated = 'Warning';
+    if (spaceNum <= 15 || newTemp >= 85 || (hasStorageHealthValue && newStorageHealth <= 29)) evaluated = 'Critical';
+    else if (spaceNum <= 50 || newTemp >= 70 || (hasStorageHealthValue && newStorageHealth <= 49)) evaluated = 'Warning';
 
     const noteEl = document.getElementById(`issue-note-${idx}`);
     const severityRank = { 'Healthy': 0, 'Warning': 1, 'Critical': 2 };
@@ -9980,10 +10090,20 @@ function saveBranchPcEdit(branchName, idx) {
         userKey: userKey,
         timestamp: new Date().toLocaleString(),
         priorState: prior,
-        details: { state: pc.state, health: pc.health, freeSpace: pc.freeSpace, temp: pc.pcTemp, username: pc.username }
+        details: {
+            state: pc.state,
+            health: pc.health,
+            freeSpace: pc.freeSpace,
+            temp: pc.pcTemp,
+            username: pc.username,
+            storageHealth: pc.storageHealth,
+            storageReplaced: Boolean(pc.storageReplaced),
+            replacementStorageModel: pc.replacementStorageModel || undefined
+        }
     });
 
     localStorage.setItem('pcData', JSON.stringify(pcData));
+    try { pushPcDataToCloud().catch(() => {}); } catch (e) {}
     persistModificationHistory();
 
     // refresh lists and metrics

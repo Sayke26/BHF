@@ -252,6 +252,7 @@
                         <div class="form-element"><label for="pcProcessor">Processor</label><input type="text" id="pcProcessor" placeholder="e.g. Intel Core i5"></div>
                         <div class="form-element"><label for="brand">Brand</label><input type="text" id="brand" placeholder="e.g. HP ProDesk"></div>
                         <div class="form-element"><label for="storage">Storage Type</label><input type="text" id="storage" required placeholder="e.g. NVMe SSD"></div>
+                        <div class="form-element"><label for="storageHealth">Storage Health (%)</label><input type="number" min="0" max="100" step="1" id="storageHealth" required placeholder="e.g. 92"></div>
                         <div class="form-element"><label for="capacity">Disk Capacity (GB)</label><input type="number" min="0" step="1" id="capacity" required placeholder="e.g. 512"></div>
                         <div class="form-element"><label for="freeSpace">Free Space (GB)</label><input type="number" min="0" step="1" id="freeSpace" required placeholder="e.g. 45"></div>
                         <div class="form-element"><label for="pcTemp">Chassis Temp (°C)</label><input type="number" id="pcTemp" required placeholder="e.g. 42"></div>
@@ -377,6 +378,7 @@
                                     <th>Storage Type</th>
                                     <th>Capacity</th>
                                     <th>Free Space</th>
+                                    <th>Storage Health</th>
                                     <th>Chassis Temp</th>
                                     <th>CPU Core Temp</th>
                                     <th>Primary User</th>
@@ -1095,6 +1097,7 @@
                                         <th>Station</th>
                                         <th>User</th>
                                         <th>Health</th>
+                                        <th>Storage Health</th>
                                         <th>Free Space</th>
                                         <th>CPU Temp</th>
                                         <th>State</th>
@@ -1750,6 +1753,11 @@
                 </div>
 
                 <div class="form-element">
+                    <label style="font-weight: 600; font-size: 13px;">Storage Health (%)</label>
+                    <input type="number" min="0" max="100" step="1" id="modalStorageHealth" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e1;">
+                </div>
+
+                <div class="form-element">
                     <label style="font-weight: 600; font-size: 13px;">Chassis Temperature (°C)</label>
                     <input type="number" id="modalPcTemp" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e1;">
                 </div>
@@ -1801,6 +1809,10 @@
                 <i class="fas fa-times"></i>
             </button>
             <h3 id="branchIssueEditorTitle" style="margin-bottom:6px; display:flex; align-items:center; gap:10px;"><i class="fas fa-tools" style="color:#dc2626;"></i> Branch Issue Editor</h3>
+            <div style="margin-bottom: 8px; padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; font-size: 13px;">
+                <i class="fas fa-info-circle" style="margin-right: 6px; color: #2563eb;"></i>
+                Mark storage replacement when a drive is swapped out and provide the replacement model so the record stays complete.
+            </div>
             <div id="branchIssueEditorContent" style="max-height:520px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-top:6px;"></div>
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
                 <button type="button" class="edit-btn" onclick="closeBranchIssueEditor()">Done</button>

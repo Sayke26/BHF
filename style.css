@@ -1723,6 +1723,7 @@ tr:hover td { background-color: #f8fafc; }
 .temp-badge-normal { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
 .temp-badge-warning { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
 .temp-badge-critical { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.temp-badge-gray { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
 
 .badge-active { background: #10b981; color: white; border-radius: 6px; }
 .badge-down { background: #475569; color: white; border-radius: 6px; }
@@ -2547,6 +2548,7 @@ tr:hover td { background-color: #f8fafc; }
 .temp-badge-normal { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
 .temp-badge-warning { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
 .temp-badge-critical { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.temp-badge-gray { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
 
 .badge-active { background: #10b981; color: white; border-radius: 6px; }
 .badge-down { background: #475569; color: white; border-radius: 6px; }
@@ -3314,15 +3316,18 @@ body.no-scroll { overflow: hidden; }
 .chart-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
 .chart-title-row h3 { margin: 0; font-size: 18px; color: var(--text-main); }
 .chart-caption { font-size: 13px; color: var(--text-muted); }
-.chart-canvas-wrapper.chart-canvas-wrapper-large { min-height: 320px; height: 320px; }
+.chart-canvas-wrapper.chart-canvas-wrapper-large { min-height: 420px; height: 420px; }
 .analysis-branch-chart-wrapper {
     display: flex;
     justify-content: center;
     align-items: center;
+    width: 100%;
+    min-height: 420px;
 }
 .analysis-branch-chart-wrapper canvas {
-    max-width: 760px;
-    width: 100%;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none;
     margin: 0 auto;
     display: block;
 }
@@ -4227,6 +4232,7 @@ body.no-scroll { overflow: hidden; }
         max-width: 520px !important;
     }
 }
+
 
 
 
