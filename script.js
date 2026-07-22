@@ -3567,6 +3567,32 @@ function focusBranchOnMap(branchName) {
     }
 }
 
+function getStaffProfileById(staffId) {
+    if (!staffId) return null;
+    const profiles = getStoredStaffProfiles() || {};
+    if (profiles[staffId]) return profiles[staffId];
+    return Object.values(profiles).find(profile => {
+        if (!profile || typeof profile !== 'object') return false;
+        return profile.id === staffId || profile.username === staffId || profile.name === staffId;
+    }) || null;
+}
+
+function getStaffMarkerById(staffId) {
+    if (!staffId) return null;
+    const profile = getStaffProfileById(staffId);
+    const lookupKeys = [staffId];
+    if (profile) {
+        lookupKeys.push(profile.id, profile.username, profile.name);
+    }
+
+    for (const key of lookupKeys) {
+        if (key && staffMarkers[key]) {
+            return staffMarkers[key];
+        }
+    }
+    return null;
+}
+
 function renderStaffMapMarkers() {
     Object.values(staffMarkers).forEach(marker => {
         if (marker && marker.remove) {
@@ -3616,34 +3642,57 @@ function renderStaffMapMarkers() {
         `, { minWidth: 180, maxWidth: 240 });
         marker.on('click', () => {
             if (bhfMap) {
-                bhfMap.setView(marker.getLatLng(), 16, { animate: true });
+                focusMapOnLatLng(marker.getLatLng(), 16);
             }
         });
-        staffMarkers[profile.id] = marker;
+
+        const staffLookupKeys = [profile.id, profile.username, profile.name].filter(Boolean);
+        staffLookupKeys.forEach(staffKey => {
+            if (staffKey) {
+                staffMarkers[staffKey] = marker;
+            }
+        });
     });
     renderLiveStaffControl();
+}
+
+function focusMapOnLatLng(latLng, zoom = 16) {
+    if (!bhfMap || !latLng) return;
+    const target = Array.isArray(latLng) ? L.latLng(latLng[0], latLng[1]) : latLng;
+    if (!target || typeof target.lat !== 'number' || typeof target.lng !== 'number') return;
+
+    try {
+        bhfMap.closePopup();
+    } catch (e) {}
+
+    try {
+        bhfMap.flyTo(target, zoom, { animate: true, duration: 0.7 });
+    } catch (e) {
+        bhfMap.setView(target, zoom, { animate: true });
+    }
 }
 
 function centerOnStaffMarker(staffId) {
     if (!bhfMap) return;
     if (!staffId) return;
 
-    const profiles = getStoredStaffProfiles();
-    const profile = profiles[staffId];
+    const profile = getStaffProfileById(staffId);
     if (!profile) return;
 
-    const marker = staffMarkers[staffId];
-    if (marker) {
+    const marker = getStaffMarkerById(staffId);
+    if (marker && marker.getLatLng) {
         const latLng = marker.getLatLng();
-        bhfMap.setView(latLng, 16, { animate: true });
-        marker.openPopup();
+        focusMapOnLatLng(latLng, 16);
+        if (marker.openPopup) {
+            marker.openPopup();
+        }
         return;
     }
 
     const location = profile.location && BRANCH_LOCATIONS[profile.location] ? BRANCH_LOCATIONS[profile.location] : null;
     if (location) {
         const latLng = [location.lat, location.lng];
-        bhfMap.setView(latLng, 16, { animate: true });
+        focusMapOnLatLng(latLng, 16);
 
         if (branchMarkers[profile.location] && branchMarkers[profile.location].openPopup) {
             branchMarkers[profile.location].openPopup();
@@ -3685,7 +3734,7 @@ function renderLiveStaffControl() {
                     ? `<img src="${profile.image}" alt="${profile.name}" class="live-staff-icon" />`
                     : `<span class="live-staff-icon live-staff-initials">${initials}</span>`;
                 return `
-                    <button type="button" class="live-staff-entry" data-staff-id="${profile.id}">
+                    <button type="button" class="live-staff-entry" data-staff-id="${profile.id || profile.username || profile.name}">
                         ${avatar}
                         <span>${profile.name}</span>
                     </button>
